@@ -1,0 +1,21 @@
+{
+  "name": "my-case-v1",
+  "private": true,
+  "version": "0.1.0",
+  "description": "My Case v1 modular monolith foundation",
+  "scripts": {
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "build": "pnpm --filter website build && pnpm --filter admin build && pnpm --filter pos build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "packageManager": "pnpm@10.15.0"
+}
