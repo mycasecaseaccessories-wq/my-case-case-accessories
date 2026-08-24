@@ -17,6 +17,7 @@ from .database import engine
 from .catalog_models import Base
 from .catalog import router as catalog_router
 from .inventory import router as inventory_router
+from .orders import router as orders_router
 from .logging_config import configure_logging, logger
 
 configure_logging()
@@ -109,3 +110,4 @@ async def foundation() -> dict[str, str]:
 app.include_router(api)
 app.include_router(catalog_router, prefix=settings.api_v1_prefix)
 app.include_router(inventory_router, prefix=settings.api_v1_prefix)
+app.include_router(orders_router, prefix=settings.api_v1_prefix)
