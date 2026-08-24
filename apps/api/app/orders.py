@@ -74,6 +74,12 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
     return order
 
 
+@router.get("", response_model=list[OrderRead])
+async def list_orders(session: AsyncSession = Depends(get_session)) -> list[Order]:
+    result = await session.execute(select(Order).order_by(Order.created_at.desc()).limit(100))
+    return list(result.scalars().all())
+
+
 @router.get("/{order_id}", response_model=OrderRead)
 async def get_order(order_id: UUID, session: AsyncSession = Depends(get_session)) -> Order:
     order = await session.get(Order, order_id)

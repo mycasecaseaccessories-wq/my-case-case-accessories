@@ -11,6 +11,9 @@ export default function Home() {
       <p>
         <a href="/catalog">Catalog Management →</a>
       </p>
+      <p>
+        <a href="/dashboard">Operations Dashboard →</a>
+      </p>
     </main>
   );
 }
