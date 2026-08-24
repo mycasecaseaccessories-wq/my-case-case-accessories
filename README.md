@@ -4,9 +4,7 @@ My Case is a modular-monolith commerce platform with one Central Backend, one Ce
 
 ## B00 status
 
-B00 — Engineering Foundation is authorized and limited to framework scaffolding, local development configuration, quality tooling, API foundation, and application shells. **Business modules are not implemented.**
-
-Not implemented in B00: products, variants, device compatibility, inventory, reservations, customers, carts, checkout, orders, payments, payment evidence, pre-orders, delivery, POS sales/shifts, returns, loyalty, promotions, Telegram commerce, reports, and business notifications.
+The original B00 foundation has been extended with the first commerce milestone. Catalog, inventory, cart/checkout, orders, admin dashboard, POS, Telegram API adapter, and authentication foundations are now implemented. Payment gateway, fulfillment, returns, loyalty, and production-grade Telegram polling remain future milestones.
 
 ## Structure
 
@@ -83,8 +81,31 @@ The B00 implementation must report any unavailable check as `NOT RUN — ENVIRON
 
 ## Migrations
 
-Alembic is initialized under `apps/api/alembic`. B00 intentionally creates **no Phase 1.2 business tables and no speculative tables**. Business schema implementation belongs to the later approved database milestone.
+Alembic is initialized under `apps/api/alembic`. Catalog, inventory, order, and user migrations are available as revisions `0001_catalog` through `0004_users`.
 
 ## Environment safety
 
 Development, test, staging, and production use separate configuration and data. Never commit `.env` files or real secrets. Development and test data must be synthetic; production customer data must not be casually copied into development.
+
+## Implemented commerce features
+
+The first commerce milestone now includes catalog, inventory, checkout, admin dashboard, POS, Telegram API adapter, and authentication foundations.
+
+### API routes
+
+- `GET/POST /api/v1/catalog/categories` manages active categories.
+- `GET/POST /api/v1/catalog/products` lists and creates products; products require a valid category and unique SKU/slug.
+- `GET /api/v1/inventory` lists stock; `POST /api/v1/inventory/{product_id}/adjust` receives or deducts stock and rejects negative inventory.
+- `POST /api/v1/orders` validates stock, creates an order, and deducts inventory; `GET /api/v1/orders` lists recent orders.
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, and `GET /api/v1/auth/me` provide the initial account and role foundation.
+
+### Application pages
+
+- Customer catalog and cart: `http://localhost:3000/`
+- Admin catalog: `http://localhost:3001/catalog`
+- Admin inventory: `http://localhost:3001/inventory`
+- Admin dashboard: `http://localhost:3001/dashboard`
+- Admin login: `http://localhost:3001/login`
+- POS: `http://localhost:3002/`
+
+Apply database migrations from `apps/api` with `alembic upgrade head` after PostgreSQL is running. The API also initializes metadata for convenient local development, but migrations remain the source of truth for deployed environments. Set a long random `JWT_SECRET` in `.env`; never use the example value in production. Telegram bot credentials are intentionally not committed; configure them only through deployment secrets.
