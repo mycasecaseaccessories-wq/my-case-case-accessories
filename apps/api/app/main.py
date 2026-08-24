@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -13,6 +14,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .config import settings
 from .database import engine
+from .catalog_models import Base
+from .catalog import router as catalog_router
 from .logging_config import configure_logging, logger
 
 configure_logging()
@@ -28,12 +31,21 @@ def error_payload(request_id: str, code: str, message: str, details: Any = None)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("service_starting", extra={"service": settings.app_name, "environment": settings.app_env})
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
     logger.info("service_stopped", extra={"service": settings.app_name})
 
 
 app = FastAPI(title="My Case v1 API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 api = APIRouter(prefix=settings.api_v1_prefix)
 
 
@@ -94,3 +106,4 @@ async def foundation() -> dict[str, str]:
 
 
 app.include_router(api)
+app.include_router(catalog_router, prefix=settings.api_v1_prefix)
