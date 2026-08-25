@@ -43,15 +43,15 @@ The existing MVP data model consists of `categories`, `products`, `inventory_ite
 
 ## 5. Customer identity requirement
 
-The final system must provide one canonical customer identity shared across Website, POS, Admin, and Telegram where applicable. The current implementation does not satisfy this requirement. It has no canonical customer table, sends website name/phone directly to an order, uses the literal `Walk-in customer`/`POS` identity for POS sales, and has no phone matching, email matching, duplicate detection, or safe merge.
+The final system must provide one canonical customer identity shared across Website, POS, Admin, and Telegram where applicable. At the time of the original decision record, the implementation did not satisfy this requirement. The subsequent R1–R3 reconciliation introduced a canonical customer foundation, exact email/phone duplicate prevention, `orders.customer_id`, website association, and POS association. Addresses and authenticated customer ownership remain future work because the detailed locked baseline artifacts are not available in the repository.
 
-This is recorded as a **REQUIRED FUTURE CORRECTION**. No matching or merging logic is implemented in this decision-record task.
+This remains a **REQUIRED FUTURE CORRECTION** for address/ownership completion; the R1–R3 customer foundation is now implemented in commit `24df9ba`.
 
 ## 6. Security status
 
-The current implementation is **NOT PRODUCTION READY**. The known gaps are business endpoints that are not consistently protected, no enforced admin role on sensitive APIs, no POS authorization, no order ownership checks, incomplete frontend route protection, production risks in the custom bearer token, and a default secret fallback when `JWT_SECRET` is absent.
+The current implementation remains **NOT PRODUCTION READY**. R1–R3 added admin-role protection to catalog writes, inventory access/adjustment, and order list/detail routes, and removed the production default-secret fallback by requiring configured `JWT_SECRET` in production/staging. Remaining gaps include full POS authorization, order ownership, complete frontend route protection, token lifecycle hardening, and broader security policy decisions.
 
-These gaps are recorded for future hardening. They were not fixed in this documentation/governance task.
+The R2 changes are recorded as implemented in commit `24df9ba`; the remaining gaps require a future authorized hardening milestone.
 
 ## 7. Schema reconciliation requirement
 
@@ -72,7 +72,7 @@ Current routes are prototype routes. Before production use, each route must be c
 | POS integration | To be determined from Phase 1.4 | Keep/Modify/Replace/Deprecate pending reconciliation | POS currently reuses generic order creation. |
 | Telegram adapter | To be determined from Phase 1.4 | Keep/Modify/Replace/Deprecate pending reconciliation | Adapter exists without live webhook/polling. |
 
-No endpoint was changed in this task.
+No endpoint was changed in the original documentation-only decision task. R1–R3 subsequently added customer endpoints and authorization changes under the separate implementation authorization.
 
 ## 9. Proposed milestone resequencing
 
@@ -100,14 +100,19 @@ The following sequence is a proposal only. It is **not approved** until reconcil
 | R17 | Reporting and admin hardening |
 | R18 | Full integration and UAT |
 
-Further implementation must stop after this decision record until the next milestone is explicitly authorized.
+Further implementation may proceed only when the corresponding milestone is explicitly authorized. R4 Catalog Normalization is now separately authorized by `Pasted_content_16.txt`; R5 must not start until R4 is completed and verified.
 
 ## 10. Verification and change boundary
 
-This task is documentation/governance only. The required verification is that only this decision record is added, source code is unchanged, migrations are unchanged, and existing Git history is unchanged. The commit for this record must be:
+The original task was documentation/governance only and was committed as `78307a0`. The subsequent R1–R3 implementation authorization produced commit `24df9ba`. This document is now updated to record the actual R4 authorization and current reconciliation status; no R4 schema migration, variant, device-compatibility, media, or availability-policy decision is claimed without the locked baseline artifacts.
 
-```text
-docs: approve MVP retention and baseline resequencing
-```
+**Explicit R4 boundary:** R4 may modify catalog implementation only. It must not start R5 inventory/reservations, payments, delivery, loyalty, promotions, returns/refunds, or live Telegram integration.
 
-**Explicit statement:** No Python, TypeScript, SQLAlchemy model, Alembic migration, endpoint, authentication behavior, POS behavior, inventory behavior, order behavior, or Telegram behavior was changed in this task.
+
+## 11. R4 Catalog Normalization status
+
+R4 was authorized by `Pasted_content_16.txt` and has been implemented as a partial, data-safe catalog normalization milestone. Existing `categories` and `products` tables, SKU uniqueness, stable UUID identifiers, slug validation, active-status filtering, customer search/filter behavior, and POS product lookup were retained. Admin now has protected category/product write behavior and product active/inactive status updates through `PATCH /api/v1/catalog/categories/{category_id}` and `PATCH /api/v1/catalog/products/{product_id}`.
+
+No R4 schema migration was required because the accessible baselines did not define a canonical variant, device-compatibility, media, or availability schema. The missing detailed Phase 1.2/1.3/1.4 artifacts are recorded as **BASELINE ARTIFACT NOT PRESENT IN REPOSITORY**. Accordingly, the following remain explicitly unresolved rather than invented: Product vs Product Variant separation; device compatibility; product media/storage; separate stock, commercial, and fulfillment availability policy; pagination/search API contract; and product detail/availability behavior beyond the existing active-status model.
+
+R4 verification added catalog validation tests for safe slugs, SKU presence, non-negative prices, and status updates. The final R4 verdict is **B. R4 PARTIAL — CONTINUE R4**, because the safe normalization and admin status behavior are implemented, while baseline-dependent catalog concepts cannot be completed without the locked design artifacts. R5 Inventory/Reservation work has not been started.

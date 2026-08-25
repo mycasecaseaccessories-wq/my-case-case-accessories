@@ -67,6 +67,20 @@ export default function CatalogPage() {
     await load();
   }
 
+  async function updateProductStatus(product: Product) {
+    const response = await fetch(`${API}/catalog/products/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ is_active: !product.is_active }),
+    });
+    if (!response.ok) {
+      setMessage("Product status ပြောင်း၍မရပါ");
+      return;
+    }
+    setMessage("Product status update ပြီးပါပြီ");
+    await load();
+  }
+
   async function createCategory(event: FormEvent) {
     event.preventDefault();
     const response = await fetch(`${API}/catalog/categories`, {
@@ -155,7 +169,10 @@ export default function CatalogPage() {
         <ul>
           {products.map((product) => (
             <li key={product.id}>
-              {product.name} · {product.sku} · {product.price}
+              {product.name} · {product.sku} · {product.price} · {product.is_active ? "Active" : "Inactive"}{" "}
+              <button type="button" onClick={() => updateProductStatus(product)}>
+                {product.is_active ? "Deactivate" : "Activate"}
+              </button>
             </li>
           ))}
         </ul>
