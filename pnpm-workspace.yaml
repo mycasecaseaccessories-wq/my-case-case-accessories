@@ -2,4 +2,5 @@ packages:
   - "apps/website"
   - "apps/admin"
   - "apps/pos"
+  - "apps/mini-app"
   - "packages/*"
