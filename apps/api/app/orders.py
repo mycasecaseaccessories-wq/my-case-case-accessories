@@ -18,7 +18,9 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 class Order(Base):
     __tablename__ = "orders"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    customer_id: Mapped[UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"), index=True, nullable=True)
+    customer_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     customer_name: Mapped[str] = mapped_column(String(160))
     customer_phone: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
@@ -54,43 +56,66 @@ class OrderRead(BaseModel):
     total: Decimal
 
 
-@router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
-async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get_session)) -> Order:
-    if payload.customer_id is not None:
-        customer = await session.get(Customer, payload.customer_id)
-        if customer is None:
-            raise HTTPException(status_code=400, detail="Customer not found")
-    order_total = Decimal("0")
+async def create_order_records(
+    session: AsyncSession,
+    customer_id: UUID | None,
+    customer_name: str,
+    customer_phone: str,
+    items: list[tuple[UUID, int]],
+) -> Order:
+    order_total = Decimal(0)
     line_records: list[tuple[Product, InventoryItem, int]] = []
-    for line in payload.items:
-        product = await session.get(Product, line.product_id)
+    for product_id, quantity in items:
+        product = await session.get(Product, product_id)
         if not product or not product.is_active:
-            raise HTTPException(status_code=400, detail=f"Product not found: {line.product_id}")
-        result = await session.execute(select(InventoryItem).where(InventoryItem.product_id == line.product_id).with_for_update())
+            raise HTTPException(status_code=400, detail=f"Product not found: {product_id}")
+        result = await session.execute(
+            select(InventoryItem).where(InventoryItem.product_id == product_id).with_for_update()
+        )
         inventory = result.scalar_one_or_none()
-        if inventory is None or inventory.quantity < line.quantity:
+        if inventory is None or inventory.quantity < quantity:
             raise HTTPException(status_code=409, detail=f"Insufficient stock: {product.name}")
-        order_total += product.price * line.quantity
-        line_records.append((product, inventory, line.quantity))
-    order = Order(customer_id=payload.customer_id, customer_name=payload.customer_name, customer_phone=payload.customer_phone, total=order_total)
+        order_total += product.price * quantity
+        line_records.append((product, inventory, quantity))
+    order = Order(
+        customer_id=customer_id, customer_name=customer_name, customer_phone=customer_phone, total=order_total
+    )
     session.add(order)
     await session.flush()
     for product, inventory, quantity in line_records:
         inventory.quantity -= quantity
         session.add(OrderItem(order_id=order.id, product_id=product.id, quantity=quantity, unit_price=product.price))
+    return order
+
+
+@router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get_session)) -> Order:
+    if payload.customer_id is not None and await session.get(Customer, payload.customer_id) is None:
+        raise HTTPException(status_code=400, detail="Customer not found")
+    order = await create_order_records(
+        session,
+        payload.customer_id,
+        payload.customer_name,
+        payload.customer_phone,
+        [(line.product_id, line.quantity) for line in payload.items],
+    )
     await session.commit()
     await session.refresh(order)
     return order
 
 
 @router.get("", response_model=list[OrderRead])
-async def list_orders(session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> list[Order]:
+async def list_orders(
+    session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))
+) -> list[Order]:
     result = await session.execute(select(Order).order_by(Order.created_at.desc()).limit(100))
     return list(result.scalars().all())
 
 
 @router.get("/{order_id}", response_model=OrderRead)
-async def get_order(order_id: UUID, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Order:
+async def get_order(
+    order_id: UUID, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))
+) -> Order:
     order = await session.get(Order, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")

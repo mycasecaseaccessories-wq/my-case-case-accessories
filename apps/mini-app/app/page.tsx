@@ -33,6 +33,16 @@ export default function MiniAppPage() {
   const [error, setError] = useState("");
   const [orderMessage, setOrderMessage] = useState("");
   const [sessionState, setSessionState] = useState<"checking" | "verified" | "unavailable" | "invalid">("checking");
+  const [initData, setInitData] = useState("");
+  const [orders, setOrders] = useState<Array<{ id: string; status: string; total: string | number }>>([]);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<{ id: string; status: string; total: string | number } | null>(
+    null,
+  );
+
+  function telegramHeaders(): Record<string, string> {
+    return initData ? { "X-Telegram-Init-Data": initData } : {};
+  }
 
   useEffect(() => {
     const saved = window.localStorage.getItem("my-case-mini-cart");
@@ -43,12 +53,31 @@ export default function MiniAppPage() {
     webApp?.ready?.();
     webApp?.expand?.();
     if (webApp?.initData) {
+      setInitData(webApp.initData);
       fetch(`${API}/auth/telegram/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ init_data: webApp.initData }),
       })
-        .then((response) => setSessionState(response.ok ? "verified" : "invalid"))
+        .then(async (response) => {
+          setSessionState(response.ok ? "verified" : "invalid");
+          if (response.ok) {
+            const cartResponse = await fetch(`${API}/telegram/cart`, {
+              headers: { "X-Telegram-Init-Data": webApp.initData || "" },
+            });
+            if (cartResponse.ok) {
+              const centralCart = await cartResponse.json();
+              const catalogResponse = await fetch(`${API}/catalog/products`);
+              const catalog = catalogResponse.ok ? ((await catalogResponse.json()) as Product[]) : [];
+              setCart(
+                (centralCart.items || []).flatMap((item: { product_id: string; quantity: number }) => {
+                  const product = catalog.find((candidate) => candidate.id === item.product_id);
+                  return product ? [{ product, quantity: item.quantity }] : [];
+                }),
+              );
+            }
+          }
+        })
         .catch(() => setSessionState("invalid"));
     } else {
       setSessionState("unavailable");
@@ -72,8 +101,16 @@ export default function MiniAppPage() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("my-case-mini-cart", JSON.stringify(cart));
-  }, [cart]);
+    if (sessionState !== "verified") window.localStorage.setItem("my-case-mini-cart", JSON.stringify(cart));
+  }, [cart, sessionState]);
+
+  async function loadOrders() {
+    if (sessionState !== "verified") return;
+    const response = await fetch(`${API}/telegram/orders`, { headers: telegramHeaders() });
+    if (!response.ok) throw new Error("orders");
+    setOrders(await response.json());
+    setOrdersOpen(true);
+  }
 
   const visible = useMemo(
     () =>
@@ -114,6 +151,28 @@ export default function MiniAppPage() {
     if (!name.trim() || !phone.trim() || !cart.length) return;
     setOrderMessage("Order တင်နေပါတယ်...");
     try {
+      if (sessionState === "verified") {
+        const linkResponse = await fetch(`${API}/telegram/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...telegramHeaders() },
+          body: JSON.stringify({ full_name: name.trim(), phone: phone.trim() }),
+        });
+        if (!linkResponse.ok) throw new Error("link");
+        for (const line of cart) {
+          const itemResponse = await fetch(`${API}/telegram/cart/items`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...telegramHeaders() },
+            body: JSON.stringify({ product_id: line.product.id, quantity: line.quantity }),
+          });
+          if (!itemResponse.ok) throw new Error("cart");
+        }
+        const response = await fetch(`${API}/telegram/cart/checkout`, { method: "POST", headers: telegramHeaders() });
+        if (!response.ok) throw new Error("order");
+        const order = await response.json();
+        setCart([]);
+        setOrderMessage(`Order အောင်မြင်ပါပြီ။ ${order.id} · ${money(order.total)}`);
+        return;
+      }
       const lookup = await fetch(`${API}/customers/lookup?phone=${encodeURIComponent(phone.trim())}`);
       const matches = lookup.ok ? await lookup.json() : [];
       const customer =
@@ -121,7 +180,7 @@ export default function MiniAppPage() {
         (await fetch(`${API}/customers`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name.trim(), phone: phone.trim() }),
+          body: JSON.stringify({ full_name: name.trim(), phone: phone.trim() }),
         }).then((response) => {
           if (!response.ok) throw new Error("customer");
           return response.json();
@@ -141,7 +200,9 @@ export default function MiniAppPage() {
       setCart([]);
       setOrderMessage(`Order အောင်မြင်ပါပြီ။ ${order.id} · ${money(order.total)}`);
     } catch {
-      setOrderMessage("Order မအောင်မြင်ပါ။ Stock နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။");
+      setOrderMessage(
+        "Order မအောင်မြင်ပါ။ Stock၊ Telegram link နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။",
+      );
     }
   }
 
@@ -150,9 +211,16 @@ export default function MiniAppPage() {
       <div className="shell">
         <header className="topbar">
           <div className="brand">My Case / Telegram Store</div>
-          <button className="cart-button" onClick={() => setCartOpen((open) => !open)} aria-label="Open cart">
-            Cart ({cart.reduce((sum, line) => sum + line.quantity, 0)})
-          </button>
+          <div className="top-actions">
+            {sessionState === "verified" && (
+              <button className="secondary" onClick={() => void loadOrders()}>
+                My Orders
+              </button>
+            )}
+            <button className="cart-button" onClick={() => setCartOpen((open) => !open)} aria-label="Open cart">
+              Cart ({cart.reduce((sum, line) => sum + line.quantity, 0)})
+            </button>
+          </div>
         </header>
         <section className="hero">
           <p className="eyebrow">Inside Telegram</p>
@@ -193,6 +261,52 @@ export default function MiniAppPage() {
           <p className="notice" role="alert">
             Telegram session ကို အတည်ပြုမရသေးပါ။ Customer account/order history များကို မပြသပါ။
           </p>
+        )}
+        {ordersOpen && (
+          <section className="cart-panel" aria-label="Order history">
+            <div className="panel-heading">
+              <h2>My Orders</h2>
+              <button className="secondary" onClick={() => setOrdersOpen(false)}>
+                Close
+              </button>
+            </div>
+            {!orders.length ? (
+              <div className="empty">Order history မရှိသေးပါ။</div>
+            ) : (
+              orders.map((order) => (
+                <button
+                  className="cart-line"
+                  key={order.id}
+                  onClick={async () => {
+                    const response = await fetch(`${API}/telegram/orders/${order.id}`, { headers: telegramHeaders() });
+                    if (response.ok) setSelectedOrder(await response.json());
+                  }}
+                >
+                  <div>
+                    <strong>{order.id}</strong>
+                    <br />
+                    <span className="sku">Status: {order.status}</span>
+                  </div>
+                  <span>{money(order.total)}</span>
+                </button>
+              ))
+            )}
+          </section>
+        )}
+        {selectedOrder && (
+          <section className="cart-panel" role="dialog" aria-label="Order detail">
+            <button className="secondary" onClick={() => setSelectedOrder(null)}>
+              Close
+            </button>
+            <h2>Order Detail</h2>
+            <p>{selectedOrder.id}</p>
+            <p>
+              Status: <strong>{selectedOrder.status}</strong>
+            </p>
+            <p>
+              Total: <strong>{money(selectedOrder.total)}</strong>
+            </p>
+          </section>
         )}
         {cartOpen && (
           <section className="cart-panel" aria-label="Cart">

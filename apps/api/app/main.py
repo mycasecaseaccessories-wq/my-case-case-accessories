@@ -6,22 +6,27 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from .config import settings
-from .database import engine
-from .catalog_models import Base
-from .catalog import router as catalog_router
-from .inventory import router as inventory_router
-from .orders import router as orders_router
+from . import (
+    cart_models,  # noqa: F401
+    customer_models,  # noqa: F401
+    telegram_models,  # noqa: F401
+)
 from .auth import router as auth_router
-from . import customer_models  # noqa: F401
+from .catalog import router as catalog_router
+from .catalog_models import Base
+from .config import settings
 from .customer import router as customer_router
+from .customer_channel import router as customer_channel_router
+from .database import engine
+from .inventory import router as inventory_router
 from .logging_config import configure_logging, logger
+from .orders import router as orders_router
 
 configure_logging()
 
@@ -80,14 +85,19 @@ async def request_context(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
     request_id = getattr(request.state, "request_id", "unknown")
-    return JSONResponse(status_code=422, content=error_payload(request_id, "VALIDATION_ERROR", "Request validation failed", exc.errors()))
+    return JSONResponse(
+        status_code=422,
+        content=error_payload(request_id, "VALIDATION_ERROR", "Request validation failed", exc.errors()),
+    )
 
 
 @app.exception_handler(Exception)
 async def unexpected_error(request: Request, _: Exception):
     request_id = getattr(request.state, "request_id", "unknown")
     logger.exception("unhandled_error", extra={"request_id": request_id, "service": settings.app_name})
-    return JSONResponse(status_code=500, content=error_payload(request_id, "INTERNAL_ERROR", "An unexpected error occurred"))
+    return JSONResponse(
+        status_code=500, content=error_payload(request_id, "INTERNAL_ERROR", "An unexpected error occurred")
+    )
 
 
 @app.get("/health", tags=["foundation"])
@@ -116,3 +126,4 @@ app.include_router(inventory_router, prefix=settings.api_v1_prefix)
 app.include_router(orders_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_router, prefix=settings.api_v1_prefix)
+app.include_router(customer_channel_router, prefix=settings.api_v1_prefix)
