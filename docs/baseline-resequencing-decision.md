@@ -116,3 +116,26 @@ R4 was authorized by `Pasted_content_16.txt` and has been implemented as a parti
 No R4 schema migration was required because the accessible baselines did not define a canonical variant, device-compatibility, media, or availability schema. The missing detailed Phase 1.2/1.3/1.4 artifacts are recorded as **BASELINE ARTIFACT NOT PRESENT IN REPOSITORY**. Accordingly, the following remain explicitly unresolved rather than invented: Product vs Product Variant separation; device compatibility; product media/storage; separate stock, commercial, and fulfillment availability policy; pagination/search API contract; and product detail/availability behavior beyond the existing active-status model.
 
 R4 verification added catalog validation tests for safe slugs, SKU presence, non-negative prices, and status updates. The final R4 verdict is **B. R4 PARTIAL — CONTINUE R4**, because the safe normalization and admin status behavior are implemented, while baseline-dependent catalog concepts cannot be completed without the locked design artifacts. R5 Inventory/Reservation work has not been started.
+
+
+## 12. R4 Baseline Recovery Gate
+
+A full repository/workspace search was completed before additional R4 implementation. The following authoritative artifacts were searched by filename and by distinctive title/content terms, including repository files, `docs`, `/home/ubuntu/upload` attachments, generated reports, and workspace documents:
+
+| Required artifact | Result |
+|---|---|
+| Phase 1.1 Requirements | **BASELINE ARTIFACTS NOT ACCESSIBLE** |
+| Phase 1.2 Database Schema & ERD v1.1 | **BASELINE ARTIFACTS NOT ACCESSIBLE** |
+| Phase 1.3 UI/UX Specification v1.1 | **BASELINE ARTIFACTS NOT ACCESSIBLE** |
+| Phase 1.4 API Specification v1.1 | **BASELINE ARTIFACTS NOT ACCESSIBLE** |
+| Phase 1.5 Development Milestones & Implementation Plan v1.0 | **BASELINE ARTIFACTS NOT ACCESSIBLE** |
+
+Only instruction/decision records and the repository’s existing B00/R4 reports were found; none is the authoritative detailed design baseline requested for R4. The current implementation at HEAD `e035d77` was inspected again, including catalog models, migrations `0001`–`0005`, catalog routes/schemas, Website, Admin, POS, tests, and configuration.
+
+Because the authoritative R4 artifacts are unavailable, no speculative Variant, Device Compatibility, Product Media, Availability precedence, canonical search API, or Pagination contract has been added. Existing R4 behavior is retained. The exact blocker is:
+
+> **BASELINE ARTIFACTS NOT ACCESSIBLE — R4 IMPLEMENTATION BLOCKED**
+
+No code, schema, endpoint, migration, or frontend change was made during this recovery gate. No empty implementation commit was created. R5 Inventory/Reservation and all later milestones remain blocked by the R4 gate.
+
+**Recovery-gate verdict:** **D. IMPLEMENTATION BLOCKED — BASELINE ARTIFACTS UNAVAILABLE**.
