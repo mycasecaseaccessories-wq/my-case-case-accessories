@@ -32,14 +32,27 @@ export default function MiniAppPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [orderMessage, setOrderMessage] = useState("");
+  const [sessionState, setSessionState] = useState<"checking" | "verified" | "unavailable" | "invalid">("checking");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("my-case-mini-cart");
     if (saved) setCart(JSON.parse(saved));
-    const webApp = (window as Window & { Telegram?: { WebApp?: { ready?: () => void; expand?: () => void } } }).Telegram
-      ?.WebApp;
+    const webApp = (
+      window as Window & { Telegram?: { WebApp?: { ready?: () => void; expand?: () => void; initData?: string } } }
+    ).Telegram?.WebApp;
     webApp?.ready?.();
     webApp?.expand?.();
+    if (webApp?.initData) {
+      fetch(`${API}/auth/telegram/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ init_data: webApp.initData }),
+      })
+        .then((response) => setSessionState(response.ok ? "verified" : "invalid"))
+        .catch(() => setSessionState("invalid"));
+    } else {
+      setSessionState("unavailable");
+    }
     Promise.all([
       fetch(`${API}/catalog/products`).then((response) => {
         if (!response.ok) throw new Error("catalog");
@@ -174,6 +187,11 @@ export default function MiniAppPage() {
         {error && (
           <p className="notice" role="alert">
             {error}
+          </p>
+        )}
+        {sessionState === "invalid" && (
+          <p className="notice" role="alert">
+            Telegram session ကို အတည်ပြုမရသေးပါ။ Customer account/order history များကို မပြသပါ။
           </p>
         )}
         {cartOpen && (

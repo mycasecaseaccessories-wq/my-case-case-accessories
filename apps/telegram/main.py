@@ -9,7 +9,7 @@ from .transport import TelegramApi, poll_forever
 async def run() -> None:
     settings = TelegramSettings.from_env()
     commerce = CommerceApiClient(settings.api_base_url, timeout=settings.request_timeout)
-    bot = TelegramCommerceBot(commerce)
+    bot = TelegramCommerceBot(commerce, mini_app_url=settings.mini_app_url)
     telegram = TelegramApi(settings)
     if settings.mode == "webhook":
         assert settings.webhook_url is not None

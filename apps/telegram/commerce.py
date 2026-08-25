@@ -38,6 +38,10 @@ class CommerceApiClient:
             description=payload.get("description"),
         )
 
+    async def list_categories(self) -> list[dict[str, Any]]:
+        response = await self._request("GET", "/catalog/categories")
+        return list(response.json())
+
     async def list_products(self, category_id: UUID | None = None) -> list[TelegramProduct]:
         params = {"category_id": str(category_id)} if category_id else None
         response = await self._request("GET", "/catalog/products", params=params)

@@ -14,6 +14,9 @@ class FakeCommerce:
         self.products = [TelegramProduct(str(self.product_id), "Clear Case", Decimal(12000), "CC-001", "Slim case")]
         self.orders: list[dict[str, object]] = []
 
+    async def list_categories(self):
+        return [{"id": str(uuid4()), "name": "Cases"}]
+
     async def list_products(self, category_id=None):
         return self.products
 
@@ -47,16 +50,22 @@ async def test_bot_uses_central_customer_and_order_flow():
     bot = TelegramCommerceBot(fake)  # type: ignore[arg-type]
     product_id = str(fake.product_id)
     assert "Clear Case" in await bot.handle_text(42, "/products")
+    assert "Cases" in await bot.handle_text(42, "/categories")
     assert "ထည့်ပြီးပါပြီ" in await bot.handle_text(42, f"/add {product_id} 2")
+    assert "ပြောင်းပြီးပါပြီ" in await bot.handle_text(42, f"/set {product_id} 3")
     assert "Clear Case" in await bot.handle_text(42, "/cart")
     confirmation = await bot.handle_text(42, "/checkout Mg Mg | 09999999999")
     assert "Order တင်ပြီးပါပြီ" in confirmation
     assert len(fake.orders) == 1
+    await bot.handle_text(42, f"/add {product_id}")
+    assert "ဖယ်ရှားပြီးပါပြီ" in await bot.handle_text(42, f"/remove {product_id}")
 
 
 @pytest.mark.asyncio
 async def test_unknown_or_unsupported_flow_is_safe():
-    bot = TelegramCommerceBot(FakeCommerce())  # type: ignore[arg-type]
+    bot = TelegramCommerceBot(FakeCommerce(), mini_app_url="https://store.example")  # type: ignore[arg-type]
+    assert bot.start_markup() is not None
+    assert "store.example" in str(bot.start_markup())
     assert "မသိသော command" in await bot.handle_text(1, "/unknown")
     assert "TBD" in await bot.handle_text(1, f"/status {uuid4()}")
 

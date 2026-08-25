@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import time
+from urllib.parse import parse_qsl
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -45,6 +46,26 @@ class TokenRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
+
+
+class TelegramInitData(BaseModel):
+    init_data: str = Field(min_length=1, max_length=4096)
+
+
+def _validate_telegram_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86400) -> dict[str, str]:
+    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+    received_hash = pairs.pop("hash", "")
+    if not received_hash or not pairs:
+        raise ValueError("Telegram init data is incomplete")
+    data_check_string = "\n".join(f"{key}={pairs[key]}" for key in sorted(pairs))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(received_hash, expected_hash):
+        raise ValueError("Telegram init data signature is invalid")
+    auth_date = int(pairs.get("auth_date", "0"))
+    if auth_date <= 0 or time.time() - auth_date > max_age_seconds:
+        raise ValueError("Telegram init data is expired")
+    return pairs
 
 def _hash_password(password: str, salt: bytes | None = None) -> str:
     salt = salt or os.urandom(16)
@@ -109,6 +130,19 @@ def require_roles(*roles: str):
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user
     return dependency
+
+@router.post("/telegram/verify")
+async def verify_telegram_init_data(payload: TelegramInitData) -> dict[str, object]:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not bot_token:
+        raise HTTPException(status_code=503, detail="Telegram authentication is not configured")
+    try:
+        pairs = _validate_telegram_init_data(payload.init_data, bot_token)
+        user_payload = json.loads(pairs.get("user", "{}"))
+        return {"verified": True, "telegram_user_id": user_payload.get("id"), "username": user_payload.get("username")}
+    except (ValueError, TypeError, json.JSONDecodeError):
+        raise HTTPException(status_code=401, detail="Invalid Telegram session")
+
 
 @router.get("/me", response_model=UserRead)
 async def me(user: User = Depends(current_user)) -> User:

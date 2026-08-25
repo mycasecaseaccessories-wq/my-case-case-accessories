@@ -19,8 +19,11 @@ class TelegramApi:
                 raise RuntimeError(f"Telegram API error: {body.get('description', 'unknown error')}")
             return body.get("result", {})
 
-    async def send_message(self, chat_id: int, text: str) -> dict[str, Any]:
-        return await self.call("sendMessage", chat_id=chat_id, text=text)
+    async def send_message(self, chat_id: int, text: str, reply_markup: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        return await self.call("sendMessage", **payload)
 
     async def get_updates(self, offset: int | None = None, timeout: int = 20) -> list[dict[str, Any]]:
         payload: dict[str, Any] = {"timeout": timeout}
@@ -42,7 +45,8 @@ async def dispatch_update(bot: TelegramCommerceBot, telegram_api: TelegramApi, u
     if chat_id is None:
         return
     reply = await bot.handle_text(int(chat_id), str(message["text"]))
-    await telegram_api.send_message(int(chat_id), reply)
+    markup = bot.start_markup() if str(message["text"]).strip().casefold() == "/start" else None
+    await telegram_api.send_message(int(chat_id), reply, markup)
 
 
 async def poll_forever(bot: TelegramCommerceBot, telegram_api: TelegramApi, stop_event: Any) -> None:

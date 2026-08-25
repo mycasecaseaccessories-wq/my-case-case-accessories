@@ -15,7 +15,13 @@ class CartLine:
 @dataclass
 class TelegramCommerceBot:
     api: CommerceApiClient
+    mini_app_url: str | None = None
     carts: dict[int, dict[UUID, CartLine]] = field(default_factory=dict)
+
+    def start_markup(self) -> dict[str, object] | None:
+        if not self.mini_app_url:
+            return None
+        return {"inline_keyboard": [[{"text": "Open My Case Store", "web_app": {"url": self.mini_app_url}}]]}
 
     def _cart(self, chat_id: int) -> dict[UUID, CartLine]:
         return self.carts.setdefault(chat_id, {})
@@ -27,14 +33,20 @@ class TelegramCommerceBot:
             if command in {"/start", "/help"}:
                 return (
                     "My Case သို့ ကြိုဆိုပါတယ်။\n"
+                    "/categories - Category စာရင်း\n"
                     "/products - Product စာရင်း\n"
                     "/search <စကားလုံး> - ရှာရန်\n"
                     "/product <id> - အသေးစိတ်\n"
                     "/add <id> [အရေအတွက်] - Cart ထဲထည့်ရန်\n"
+                    "/set <id> <အရေအတွက်> - Cart quantity ပြောင်းရန်\n"
+                    "/remove <id> - Cart မှ ဖယ်ရန်\n"
                     "/cart - Cart ကြည့်ရန်\n"
                     "/checkout <အမည်> | <ဖုန်း> - Order တင်ရန်\n"
                     "/status <order-id> - Order status"
                 )
+            if command == "/categories":
+                categories = await self.api.list_categories()
+                return "\n".join(f"{index}. {item['name']}" for index, item in enumerate(categories, 1)) or "Category မရှိသေးပါ။"
             if command == "/products":
                 return format_product_menu(await self.api.list_products())
             if command == "/search":
@@ -54,6 +66,20 @@ class TelegramCommerceBot:
                     return "အရေအတွက်သည် 1 မှ 999 အတွင်း ဖြစ်ရပါမည်။"
                 self._cart(chat_id)[product_id] = CartLine(product_id, quantity)
                 return "Cart ထဲသို့ ထည့်ပြီးပါပြီ။ /cart ဖြင့် စစ်ဆေးနိုင်ပါတယ်။"
+            if command == "/set":
+                parts = argument.split()
+                if len(parts) != 2:
+                    return "Format: /set <product-id> <အရေအတွက်>"
+                product_id = UUID(parts[0])
+                quantity = int(parts[1])
+                if quantity < 1 or quantity > 999:
+                    return "အရေအတွက်သည် 1 မှ 999 အတွင်း ဖြစ်ရပါမည်။"
+                self._cart(chat_id)[product_id] = CartLine(product_id, quantity)
+                return "Cart အရေအတွက်ကို ပြောင်းပြီးပါပြီ။"
+            if command == "/remove":
+                product_id = UUID(argument.strip())
+                self._cart(chat_id).pop(product_id, None)
+                return "Cart မှ ဖယ်ရှားပြီးပါပြီ။"
             if command == "/cart":
                 cart = self._cart(chat_id)
                 if not cart:
