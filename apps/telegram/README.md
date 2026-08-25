@@ -1,18 +1,24 @@
 # My Case Telegram-first commerce channel
 
-This package is a channel adapter over the existing Central API. It does not own business data, customers, inventory, or orders. Product, stock, customer, and order truth remains in the Central Backend and Central Database.
+This package is a channel adapter over the existing Central API. It does not own business data, customers, inventory, carts, or orders. Product, stock, customer, cart, and order truth remains in the Central Backend and Central Database.
 
 ## Configuration
 
-Set `TELEGRAM_BOT_TOKEN` and `CENTRAL_API_BASE_URL` in the environment. The default transport is long polling (`TELEGRAM_MODE=polling`). Webhook mode requires both `TELEGRAM_MODE=webhook` and `TELEGRAM_WEBHOOK_URL`.
+Set `TELEGRAM_BOT_TOKEN` and `CENTRAL_API_BASE_URL` in the environment. The default transport is long polling (`TELEGRAM_MODE=polling`). Webhook mode requires `TELEGRAM_MODE=webhook`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET_TOKEN`.
 
-The token is never hard-coded. Startup fails when the token is absent, and webhook mode fails when its URL is absent.
+The token is never hard-coded. Startup fails when the token is absent. Webhook mode fails closed when its URL or secret token is absent, registers the secret with Telegram, and verifies the `X-Telegram-Bot-Api-Secret-Token` header on every update.
 
-## Supported channel flow
+## Customer identity and durable commerce flow
 
-`/products` lists active Central API products with MMK prices. `/search <term>` performs deterministic client-side filtering of the Central product list because no separate Telegram search contract is defined. `/product <uuid>` displays central product details. `/add <uuid> [quantity]` keeps a chat-local cart. `/checkout Name | Phone` resolves or creates the canonical Central customer and creates the order through the Central Order API, so stock is checked and deducted by the Central transaction. `/cart` displays the current cart.
+The Mini App sends Telegram WebApp `initData` to the Central Backend for cryptographic verification. The Bot uses the server-side bot token boundary. A verified Telegram identity is linked explicitly to the canonical Central Customer using the customer’s exact phone number; display names, usernames, arbitrary customer IDs, and request-body Telegram IDs are not identity authority. Conflicting links return a safe conflict response and are never silently merged.
 
-Order status lookup is intentionally marked TBD because the current Central order detail endpoint is admin-protected and no approved Telegram customer-ownership or handoff-token mechanism is defined. Payment, delivery, promotion, fulfillment, and handoff policies remain deferred rather than invented.
+After linking, `/add`, `/cart`, `/set`, and `/remove` operate on the customer-owned Central cart. The cart survives Bot process restarts and is shared with the Mini App. Anonymous pre-link Bot state is only a temporary fallback and is not authoritative. `/checkout Name | Phone` links the customer when needed, transfers temporary lines to the Central cart, and checks out through the Central order transaction. Checkout accepts an idempotency key so a retry cannot create a duplicate order.
+
+## Supported customer order flow
+
+`/orders` and `/history` list only orders owned by the verified canonical Customer. `/order <uuid>` and `/status <uuid>` return only customer-safe date, status, total, and item information. A non-owned order is returned as not found without disclosing ownership. The Mini App provides the equivalent My Orders, order detail, and status views.
+
+The customer-facing routes are separate from admin order routes. Admin catalog, inventory, and order authorization remain unchanged. Payment, delivery, promotion, fulfillment, and the secure Website session handoff remain outside this milestone until their approved contracts and production infrastructure exist.
 
 ## Run
 

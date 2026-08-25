@@ -166,7 +166,10 @@ export default function MiniAppPage() {
           });
           if (!itemResponse.ok) throw new Error("cart");
         }
-        const response = await fetch(`${API}/telegram/cart/checkout`, { method: "POST", headers: telegramHeaders() });
+        const response = await fetch(`${API}/telegram/cart/checkout`, {
+          method: "POST",
+          headers: { ...telegramHeaders(), "X-Checkout-Idempotency-Key": `mini-app:${crypto.randomUUID()}` },
+        });
         if (!response.ok) throw new Error("order");
         const order = await response.json();
         setCart([]);

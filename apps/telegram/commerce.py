@@ -136,6 +136,22 @@ class CommerceApiClient:
         )
         return response.json()
 
+    async def add_cart_item(
+        self, telegram_user_id: int, product_id: UUID, quantity: int
+    ) -> dict[str, Any]:
+        cart = await self.get_cart(telegram_user_id)
+        current = next(
+            (
+                item["quantity"]
+                for item in cart.get("items", [])
+                if item["product_id"] == str(product_id)
+            ),
+            0,
+        )
+        return await self.set_cart_item(
+            telegram_user_id, product_id, min(current + quantity, 999)
+        )
+
     async def set_cart_item(
         self, telegram_user_id: int, product_id: UUID, quantity: int
     ) -> dict[str, Any]:
@@ -157,11 +173,16 @@ class CommerceApiClient:
         )
         return response.json()
 
-    async def checkout_cart(self, telegram_user_id: int) -> dict[str, Any]:
+    async def checkout_cart(
+        self, telegram_user_id: int, checkout_key: str | None = None
+    ) -> dict[str, Any]:
+        headers = self._telegram_headers(telegram_user_id)
+        if checkout_key:
+            headers["X-Checkout-Idempotency-Key"] = checkout_key
         response = await self._request(
             "POST",
             "/telegram/cart/checkout",
-            headers=self._telegram_headers(telegram_user_id),
+            headers=headers,
         )
         return response.json()
 

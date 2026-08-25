@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -76,10 +76,10 @@ class TelegramCommerceBot:
                 quantity = int(parts[1]) if len(parts) > 1 else 1
                 if quantity < 1 or quantity > 999:
                     return "အရေအတွက်သည် 1 မှ 999 အတွင်း ဖြစ်ရပါမည်။"
-                central_set = getattr(self.api, "set_cart_item", None)
-                if callable(central_set):
+                central_add = getattr(self.api, "add_cart_item", None)
+                if callable(central_add):
                     try:
-                        await central_set(chat_id, product_id, quantity)
+                        await central_add(chat_id, product_id, quantity)
                         return "Cart ထဲသို့ ထည့်ပြီးပါပြီ။ /cart ဖြင့် စစ်ဆေးနိုင်ပါတယ်။"
                     except httpx.HTTPStatusError as exc:
                         if exc.response.status_code != 409:
@@ -156,7 +156,7 @@ class TelegramCommerceBot:
                         await self.api.set_cart_item(
                             chat_id, line.product_id, line.quantity
                         )  # type: ignore[attr-defined]
-                    order = await checkout(chat_id)
+                    order = await checkout(chat_id, f"telegram:{chat_id}:{uuid4()}")
                 else:
                     customer_id = UUID(str(customer["id"]))
                     order = await self.api.create_order(
@@ -181,7 +181,7 @@ class TelegramCommerceBot:
                 if not orders:
                     return "မိမိ၏ order history မရှိသေးပါ။"
                 return "\n".join(
-                    f"{order['id']} · {order['status']} · {order['total']} MMK"
+                    f"{order['id']} · {order['status']} · {order['total']} MMK · {order.get('created_at', '')}"
                     for order in orders
                 )
             if command in {"/order", "/status"}:
@@ -191,7 +191,14 @@ class TelegramCommerceBot:
                 if not callable(get_customer_order):
                     return "Customer-owned order API မရသေးပါ။"
                 order = await get_customer_order(chat_id, UUID(argument.strip()))
-                return f"Order ID: {order['id']}\nStatus: {order['status']}\nစုစုပေါင်း: {order['total']} MMK"
+                item_lines = "\n".join(
+                    f"- {item['product_name']} × {item['quantity']}"
+                    for item in order.get("items", [])
+                )
+                return (
+                    f"Order ID: {order['id']}\nDate: {order.get('created_at', '')}\n"
+                    f"Status: {order['status']}\nစုစုပေါင်း: {order['total']} MMK\n{item_lines}"
+                )
             return "မသိသော command ဖြစ်ပါတယ်။ /help ဖြင့် အသုံးပြုနိုင်သော command များကို ကြည့်ပါ။"
         except (ValueError, httpx.HTTPError, KeyError) as exc:
             _ = exc
