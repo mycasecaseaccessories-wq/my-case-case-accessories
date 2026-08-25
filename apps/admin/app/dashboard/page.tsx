@@ -6,6 +6,7 @@ type Product = { id: string; name: string; price: string };
 type Inventory = { product_id: string; quantity: number; reorder_level: number; low_stock: boolean };
 type Order = { id: string; status: string; total: string };
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+const authHeaders = () => ({ Authorization: `Bearer ${window.localStorage.getItem("mycase-access-token") || ""}` });
 
 export default function DashboardPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -13,7 +14,11 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
-    Promise.all([fetch(`${API}/catalog/products`), fetch(`${API}/inventory`), fetch(`${API}/orders`)])
+    Promise.all([
+      fetch(`${API}/catalog/products`),
+      fetch(`${API}/inventory`, { headers: authHeaders() }),
+      fetch(`${API}/orders`, { headers: authHeaders() }),
+    ])
       .then(async ([p, i, o]) => {
         if (!p.ok || !i.ok || !o.ok) throw new Error("Dashboard API မရနိုင်ပါ");
         setProducts(await p.json());

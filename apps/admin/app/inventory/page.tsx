@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 type Item = { product_id: string; quantity: number; reorder_level: number; low_stock: boolean };
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+const authHeaders = () => ({ Authorization: `Bearer ${window.localStorage.getItem("mycase-access-token") || ""}` });
 
 export default function InventoryPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -13,7 +14,7 @@ export default function InventoryPage() {
   const [message, setMessage] = useState("");
 
   async function load() {
-    const response = await fetch(`${API}/inventory`);
+    const response = await fetch(`${API}/inventory`, { headers: authHeaders() });
     if (!response.ok) throw new Error("Inventory API မရနိုင်ပါ");
     setItems(await response.json());
   }
@@ -25,7 +26,7 @@ export default function InventoryPage() {
     event.preventDefault();
     const response = await fetch(`${API}/inventory/${productId}/adjust`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ delta: Number(delta), reason }),
     });
     if (!response.ok) {

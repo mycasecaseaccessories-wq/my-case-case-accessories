@@ -14,6 +14,7 @@ type Product = {
 };
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+const authHeaders = () => ({ Authorization: `Bearer ${window.localStorage.getItem("mycase-access-token") || ""}` });
 
 export default function CatalogPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -45,7 +46,7 @@ export default function CatalogPage() {
     event.preventDefault();
     const response = await fetch(`${API}/catalog/products`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         category_id: productCategoryId,
         name: productName,
@@ -70,7 +71,7 @@ export default function CatalogPage() {
     event.preventDefault();
     const response = await fetch(`${API}/catalog/categories`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ name: categoryName, slug: categorySlug }),
     });
     if (!response.ok) {

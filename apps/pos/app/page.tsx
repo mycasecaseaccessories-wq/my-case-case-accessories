@@ -9,6 +9,8 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [message, setMessage] = useState("");
   useEffect(() => {
     fetch(`${API}/catalog/products`)
@@ -25,14 +27,40 @@ export default function Home() {
     const items = Object.entries(selected)
       .filter(([, quantity]) => quantity > 0)
       .map(([product_id, quantity]) => ({ product_id, quantity }));
-    if (!items.length) {
-      setMessage("Product ရွေးပါ");
+    if (!items.length || !customerName || !customerPhone) {
+      setMessage("Customer နှင့် product ကို ဖြည့်/ရွေးပါ");
       return;
+    }
+    let customerResponse = await fetch(`${API}/customers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_name: customerName, phone: customerPhone }),
+    });
+    let customer: { id: string };
+    if (customerResponse.status === 409) {
+      customerResponse = await fetch(`${API}/customers/lookup?phone=${encodeURIComponent(customerPhone)}`);
+      const matches = await customerResponse.json();
+      if (!customerResponse.ok || matches.length !== 1) {
+        setMessage("Customer identity ကို အတည်ပြု၍မရပါ");
+        return;
+      }
+      customer = matches[0];
+    } else {
+      if (!customerResponse.ok) {
+        setMessage("Customer မသိမ်းနိုင်ပါ");
+        return;
+      }
+      customer = await customerResponse.json();
     }
     const response = await fetch(`${API}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customer_name: "Walk-in customer", customer_phone: "POS", items }),
+      body: JSON.stringify({
+        customer_id: customer.id,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        items,
+      }),
     });
     if (!response.ok) {
       setMessage("Sale မပြီးမြောက်ပါ။ Stock ကို စစ်ပါ။");
@@ -52,6 +80,20 @@ export default function Home() {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
+      <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+        <input
+          required
+          placeholder="Customer name"
+          value={customerName}
+          onChange={(event) => setCustomerName(event.target.value)}
+        />
+        <input
+          required
+          placeholder="Customer phone"
+          value={customerPhone}
+          onChange={(event) => setCustomerPhone(event.target.value)}
+        />
+      </div>
       {message && <p role="status">{message}</p>}
       <section
         style={{

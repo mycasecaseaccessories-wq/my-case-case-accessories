@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .auth import require_roles
 from .catalog_models import Category, Product
 from .database import get_session
 
@@ -47,7 +48,7 @@ async def list_categories(session: AsyncSession = Depends(get_session)) -> list[
 
 
 @router.post("/categories", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
-async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session)) -> Category:
+async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Category:
     category = Category(**payload.model_dump())
     session.add(category)
     try:
@@ -80,7 +81,7 @@ async def get_product(product_id: UUID, session: AsyncSession = Depends(get_sess
 
 
 @router.post("/products", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
-async def create_product(payload: ProductCreate, session: AsyncSession = Depends(get_session)) -> Product:
+async def create_product(payload: ProductCreate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Product:
     if not await session.get(Category, payload.category_id):
         raise HTTPException(status_code=400, detail="Category not found")
     product = Product(**payload.model_dump())

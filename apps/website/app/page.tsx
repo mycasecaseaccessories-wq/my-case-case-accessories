@@ -59,10 +59,32 @@ export default function Home() {
   const cartTotal = cart.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0);
 
   async function checkout() {
+    let customerResponse = await fetch(`${API}/customers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_name: customerName, phone: customerPhone }),
+    });
+    let customer: { id: string };
+    if (customerResponse.status === 409) {
+      customerResponse = await fetch(`${API}/customers/lookup?phone=${encodeURIComponent(customerPhone)}`);
+      const matches = await customerResponse.json();
+      if (!customerResponse.ok || matches.length !== 1) {
+        setOrderMessage("Customer identity ကို အတည်ပြု၍မရပါ။");
+        return;
+      }
+      customer = matches[0];
+    } else {
+      if (!customerResponse.ok) {
+        setOrderMessage("Customer information မသိမ်းနိုင်ပါ။");
+        return;
+      }
+      customer = await customerResponse.json();
+    }
     const response = await fetch(`${API}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        customer_id: customer.id,
         customer_name: customerName,
         customer_phone: customerPhone,
         items: cart.map((line) => ({ product_id: line.product.id, quantity: line.quantity })),

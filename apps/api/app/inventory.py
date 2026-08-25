@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .auth import require_roles
 from .catalog_models import InventoryItem, Product, StockMovement
 from .database import get_session
 
@@ -24,13 +25,13 @@ class StockAdjustment(BaseModel):
 
 
 @router.get("", response_model=list[InventoryRead])
-async def list_inventory(session: AsyncSession = Depends(get_session)) -> list[InventoryRead]:
+async def list_inventory(session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> list[InventoryRead]:
     result = await session.execute(select(InventoryItem).join(Product).where(Product.is_active.is_(True)).order_by(InventoryItem.updated_at.desc()))
     return [InventoryRead(product_id=row.product_id, quantity=row.quantity, reorder_level=row.reorder_level, low_stock=row.quantity <= row.reorder_level) for row in result.scalars().all()]
 
 
 @router.post("/{product_id}/adjust", response_model=InventoryRead)
-async def adjust_stock(product_id: UUID, payload: StockAdjustment, session: AsyncSession = Depends(get_session)) -> InventoryRead:
+async def adjust_stock(product_id: UUID, payload: StockAdjustment, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> InventoryRead:
     product = await session.get(Product, product_id)
     if not product or not product.is_active:
         raise HTTPException(status_code=404, detail="Product not found")

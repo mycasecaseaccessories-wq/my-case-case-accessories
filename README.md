@@ -109,3 +109,12 @@ The first commerce milestone now includes catalog, inventory, checkout, admin da
 - POS: `http://localhost:3002/`
 
 Apply database migrations from `apps/api` with `alembic upgrade head` after PostgreSQL is running. The API also initializes metadata for convenient local development, but migrations remain the source of truth for deployed environments. Set a long random `JWT_SECRET` in `.env`; never use the example value in production. Telegram bot credentials are intentionally not committed; configure them only through deployment secrets.
+
+
+## Reconciliation milestone (R1–R3)
+
+The retained MVP now includes a forward `0005_customers` migration that adds the canonical customer foundation and a nullable `orders.customer_id` relationship without rewriting earlier migrations. The customer API provides create, exact email/phone lookup, and customer retrieval; duplicate identity candidates return `409` rather than being silently merged. Website checkout and POS sales resolve or create a canonical customer before creating an order.
+
+Sensitive catalog writes, inventory access/adjustment, and order list/detail routes now require the existing `admin` role dependency. JWT signing uses the configured `JWT_SECRET`; production and staging configurations fail closed when it is absent, while the development fallback is explicitly development-only. Existing MVP routes remain compatible where possible, and customer name/phone order snapshots are preserved for legacy records.
+
+The current implementation remains an MVP and is not production-ready. Customer addresses, payments, delivery, reservations, returns/refunds, and live Telegram webhook/polling remain outside this reconciliation slice because the locked detailed baseline artifacts were not available in the repository. Backend unit coverage includes password/token helper checks; typecheck, builds, Python compilation, and six API tests pass in the verification environment. Ruff still reports legacy B008/import-style findings in the existing API/migration code and requires a separate style cleanup milestone.

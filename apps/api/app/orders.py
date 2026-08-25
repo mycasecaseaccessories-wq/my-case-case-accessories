@@ -7,7 +7,9 @@ from sqlalchemy import DateTime, ForeignKey, Numeric, String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
+from .auth import require_roles
 from .catalog_models import Base, InventoryItem, Product
+from .customer_models import Customer
 from .database import get_session
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -16,6 +18,7 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 class Order(Base):
     __tablename__ = "orders"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    customer_id: Mapped[UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"), index=True, nullable=True)
     customer_name: Mapped[str] = mapped_column(String(160))
     customer_phone: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
@@ -38,6 +41,7 @@ class OrderLine(BaseModel):
 
 
 class OrderCreate(BaseModel):
+    customer_id: UUID | None = None
     customer_name: str = Field(min_length=1, max_length=160)
     customer_phone: str = Field(min_length=5, max_length=40)
     items: list[OrderLine] = Field(min_length=1, max_length=50)
@@ -45,12 +49,17 @@ class OrderCreate(BaseModel):
 
 class OrderRead(BaseModel):
     id: UUID
+    customer_id: UUID | None
     status: str
     total: Decimal
 
 
 @router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
 async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get_session)) -> Order:
+    if payload.customer_id is not None:
+        customer = await session.get(Customer, payload.customer_id)
+        if customer is None:
+            raise HTTPException(status_code=400, detail="Customer not found")
     order_total = Decimal("0")
     line_records: list[tuple[Product, InventoryItem, int]] = []
     for line in payload.items:
@@ -63,7 +72,7 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
             raise HTTPException(status_code=409, detail=f"Insufficient stock: {product.name}")
         order_total += product.price * line.quantity
         line_records.append((product, inventory, line.quantity))
-    order = Order(customer_name=payload.customer_name, customer_phone=payload.customer_phone, total=order_total)
+    order = Order(customer_id=payload.customer_id, customer_name=payload.customer_name, customer_phone=payload.customer_phone, total=order_total)
     session.add(order)
     await session.flush()
     for product, inventory, quantity in line_records:
@@ -75,13 +84,13 @@ async def create_order(payload: OrderCreate, session: AsyncSession = Depends(get
 
 
 @router.get("", response_model=list[OrderRead])
-async def list_orders(session: AsyncSession = Depends(get_session)) -> list[Order]:
+async def list_orders(session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> list[Order]:
     result = await session.execute(select(Order).order_by(Order.created_at.desc()).limit(100))
     return list(result.scalars().all())
 
 
 @router.get("/{order_id}", response_model=OrderRead)
-async def get_order(order_id: UUID, session: AsyncSession = Depends(get_session)) -> Order:
+async def get_order(order_id: UUID, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Order:
     order = await session.get(Order, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
