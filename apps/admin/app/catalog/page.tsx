@@ -77,8 +77,9 @@ export default function CatalogPage() {
       setMessage("Product status ပြောင်း၍မရပါ");
       return;
     }
+    const updated = (await response.json()) as Product;
+    setProducts((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     setMessage("Product status update ပြီးပါပြီ");
-    await load();
   }
 
   async function createCategory(event: FormEvent) {
