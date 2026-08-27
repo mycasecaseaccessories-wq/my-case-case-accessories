@@ -68,6 +68,10 @@ export interface Customer {
   phone: string;
 }
 
+export interface CustomerLookupResult {
+  id: string;
+}
+
 export interface CustomerInput {
   full_name: string;
   phone: string;
@@ -107,6 +111,90 @@ export type AuthTokenUser = {
 export interface AuthToken {
   access_token: string;
   user: AuthTokenUser;
+}
+
+export interface Account {
+  id: string;
+  email: string;
+  role: string;
+}
+
+export interface TelegramInitData {
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  init_data: string;
+}
+
+export interface TelegramVerification {
+  verified: boolean;
+  telegram_user_id: string;
+  /** @nullable */
+  username?: string | null;
+}
+
+export interface TelegramLinkInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  full_name: string;
+  /**
+     * @minLength 5
+     * @maxLength 40
+     */
+  phone: string;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  email?: string | null;
+}
+
+export interface TelegramLink {
+  linked: boolean;
+  customer_id: string;
+}
+
+export interface TelegramCartItemInput {
+  product_id: string;
+  /**
+     * @minimum 1
+     * @maximum 999
+     */
+  quantity: number;
+}
+
+export interface TelegramCartItem {
+  product_id: string;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: string;
+  line_total: string;
+}
+
+export interface TelegramCart {
+  customer_id: string;
+  items: TelegramCartItem[];
+  total: string;
+}
+
+export interface TelegramOrderItem {
+  product_id: string;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: string;
+}
+
+export interface TelegramOrder {
+  id: string;
+  status: string;
+  total: string;
+  created_at: string;
+  items: TelegramOrderItem[];
 }
 
 export type LookupCustomerParams = {

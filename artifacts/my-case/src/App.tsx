@@ -1,62 +1,28 @@
-import { type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/not-found';
-import {
-  Route,
-  Switch,
-  useLocation,
-  Router as WouterRouter,
-} from 'wouter';
+import { Route, Router, Switch } from "wouter";
+import StorefrontPage from "./pages/storefront";
+import AdminHomePage from "./pages/admin/home";
+import AdminLoginPage from "./pages/admin/login";
+import AdminDashboardPage from "./pages/admin/dashboard";
+import AdminCatalogPage from "./pages/admin/catalog";
+import AdminInventoryPage from "./pages/admin/inventory";
+import PosPage from "./pages/pos";
+import MiniAppPage from "./pages/mini/page";
+import NotFound from "./pages/not-found";
 
-const queryClient = new QueryClient();
-
-function Home() {
+export default function App() {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Replit Agent is building...
-        </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Your app will appear here once it's ready.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function Router() {
-  return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
-    <RoutedErrorBoundary>
+    <Router base={(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}>
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/" component={StorefrontPage} />
+        <Route path="/admin" component={AdminHomePage} />
+        <Route path="/admin/login" component={AdminLoginPage} />
+        <Route path="/admin/dashboard" component={AdminDashboardPage} />
+        <Route path="/admin/catalog" component={AdminCatalogPage} />
+        <Route path="/admin/inventory" component={AdminInventoryPage} />
+        <Route path="/pos" component={PosPage} />
+        <Route path="/mini-app" component={MiniAppPage} />
         <Route component={NotFound} />
       </Switch>
-    </RoutedErrorBoundary>
+    </Router>
   );
 }
-
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
-}
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-}
-
-export default App;

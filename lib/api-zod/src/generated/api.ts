@@ -114,6 +114,22 @@ export const UpdateProductResponse = zod.object({
 
 
 /**
+ * @summary List active and inactive products for administrators
+ */
+export const ListManagedProductsResponseItem = zod.object({
+  "id": zod.string(),
+  "category_id": zod.string(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "sku": zod.string(),
+  "description": zod.string().nullish(),
+  "price": zod.string(),
+  "is_active": zod.boolean()
+})
+export const ListManagedProductsResponse = zod.array(ListManagedProductsResponseItem)
+
+
+/**
  * @summary List inventory
  */
 export const ListInventoryResponseItem = zod.object({
@@ -168,9 +184,7 @@ export const LookupCustomerQueryParams = zod.object({
 })
 
 export const LookupCustomerResponseItem = zod.object({
-  "id": zod.string(),
-  "full_name": zod.string(),
-  "phone": zod.string()
+  "id": zod.string()
 })
 export const LookupCustomerResponse = zod.array(LookupCustomerResponseItem)
 
@@ -230,6 +244,223 @@ export const LoginResponse = zod.object({
   "user": zod.object({
   "role": zod.string()
 })
+})
+
+
+/**
+ * @summary Register a new account
+ */
+export const registerBodyPasswordMin = 8;
+
+
+
+export const RegisterBody = zod.object({
+  "email": zod.string(),
+  "password": zod.string().min(registerBodyPasswordMin)
+})
+
+export const RegisterResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.string()
+})
+
+
+/**
+ * @summary Provision the one-time initial administrator with a setup secret
+ */
+export const BootstrapAdminHeader = zod.object({
+  "X-Admin-Setup-Secret": zod.string()
+})
+
+export const bootstrapAdminBodyPasswordMin = 8;
+
+
+
+export const BootstrapAdminBody = zod.object({
+  "email": zod.string(),
+  "password": zod.string().min(bootstrapAdminBodyPasswordMin)
+})
+
+export const BootstrapAdminResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.string()
+})
+
+
+/**
+ * @summary Get the current authenticated account
+ */
+export const GetCurrentUserResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.string()
+})
+
+
+/**
+ * @summary Verify Telegram WebApp init data
+ */
+export const verifyTelegramBodyInitDataMax = 4096;
+
+
+
+export const VerifyTelegramBody = zod.object({
+  "init_data": zod.string().min(1).max(verifyTelegramBodyInitDataMax)
+})
+
+export const VerifyTelegramResponse = zod.object({
+  "verified": zod.boolean(),
+  "telegram_user_id": zod.string(),
+  "username": zod.string().nullish()
+})
+
+
+/**
+ * @summary Link the verified Telegram identity to a customer
+ */
+export const linkTelegramCustomerBodyFullNameMax = 160;
+
+export const linkTelegramCustomerBodyPhoneMin = 5;
+export const linkTelegramCustomerBodyPhoneMax = 40;
+
+export const linkTelegramCustomerBodyEmailMax = 255;
+
+
+
+export const LinkTelegramCustomerBody = zod.object({
+  "full_name": zod.string().min(1).max(linkTelegramCustomerBodyFullNameMax),
+  "phone": zod.string().min(linkTelegramCustomerBodyPhoneMin).max(linkTelegramCustomerBodyPhoneMax),
+  "email": zod.string().max(linkTelegramCustomerBodyEmailMax).nullish()
+})
+
+export const LinkTelegramCustomerResponse = zod.object({
+  "linked": zod.boolean(),
+  "customer_id": zod.string()
+})
+
+
+/**
+ * @summary Get the verified customer's persistent cart
+ */
+export const GetTelegramCartResponse = zod.object({
+  "customer_id": zod.string(),
+  "items": zod.array(zod.object({
+  "product_id": zod.string(),
+  "product_name": zod.string(),
+  "sku": zod.string(),
+  "quantity": zod.number(),
+  "unit_price": zod.string(),
+  "line_total": zod.string()
+})),
+  "total": zod.string()
+})
+
+
+/**
+ * @summary Add or replace a persistent cart line
+ */
+export const upsertTelegramCartItemBodyQuantityMax = 999;
+
+
+
+export const UpsertTelegramCartItemBody = zod.object({
+  "product_id": zod.string(),
+  "quantity": zod.number().min(1).max(upsertTelegramCartItemBodyQuantityMax)
+})
+
+export const UpsertTelegramCartItemResponse = zod.object({
+  "customer_id": zod.string(),
+  "items": zod.array(zod.object({
+  "product_id": zod.string(),
+  "product_name": zod.string(),
+  "sku": zod.string(),
+  "quantity": zod.number(),
+  "unit_price": zod.string(),
+  "line_total": zod.string()
+})),
+  "total": zod.string()
+})
+
+
+/**
+ * @summary Remove a persistent cart line
+ */
+export const DeleteTelegramCartItemParams = zod.object({
+  "productId": zod.coerce.string()
+})
+
+export const DeleteTelegramCartItemResponse = zod.object({
+  "customer_id": zod.string(),
+  "items": zod.array(zod.object({
+  "product_id": zod.string(),
+  "product_name": zod.string(),
+  "sku": zod.string(),
+  "quantity": zod.number(),
+  "unit_price": zod.string(),
+  "line_total": zod.string()
+})),
+  "total": zod.string()
+})
+
+
+/**
+ * @summary Checkout the verified customer's persistent cart
+ */
+export const CheckoutTelegramCartResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.string(),
+  "total": zod.string(),
+  "created_at": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "product_id": zod.string(),
+  "product_name": zod.string(),
+  "sku": zod.string(),
+  "quantity": zod.number(),
+  "unit_price": zod.string()
+}))
+})
+
+
+/**
+ * @summary List orders belonging to the verified customer
+ */
+export const ListTelegramOrdersResponseItem = zod.object({
+  "id": zod.string(),
+  "status": zod.string(),
+  "total": zod.string(),
+  "created_at": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "product_id": zod.string(),
+  "product_name": zod.string(),
+  "sku": zod.string(),
+  "quantity": zod.number(),
+  "unit_price": zod.string()
+}))
+})
+export const ListTelegramOrdersResponse = zod.array(ListTelegramOrdersResponseItem)
+
+
+/**
+ * @summary Get one order belonging to the verified customer
+ */
+export const GetTelegramOrderParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const GetTelegramOrderResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.string(),
+  "total": zod.string(),
+  "created_at": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "product_id": zod.string(),
+  "product_name": zod.string(),
+  "sku": zod.string(),
+  "quantity": zod.number(),
+  "unit_price": zod.string()
+}))
 })
 
 

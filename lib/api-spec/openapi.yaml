@@ -108,6 +108,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+  /catalog/products/manage:
+    get:
+      operationId: listManagedProducts
+      tags: [catalog]
+      summary: List active and inactive products for administrators
+      responses:
+        "200":
+          description: All products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
   /inventory:
     get:
       operationId: listInventory
@@ -179,7 +193,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Customer"
+                  $ref: "#/components/schemas/CustomerLookupResult"
   /orders:
     get:
       operationId: listOrders
@@ -229,6 +243,182 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthToken"
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "201":
+          description: Created account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+  /auth/bootstrap-admin:
+    post:
+      operationId: bootstrapAdmin
+      tags: [auth]
+      summary: Provision the one-time initial administrator with a setup secret
+      parameters:
+        - name: X-Admin-Setup-Secret
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "201":
+          description: Provisioned administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the current authenticated account
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+  /auth/telegram/verify:
+    post:
+      operationId: verifyTelegram
+      tags: [auth]
+      summary: Verify Telegram WebApp init data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramInitData"
+      responses:
+        "200":
+          description: Verified Telegram identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramVerification"
+  /telegram/link:
+    post:
+      operationId: linkTelegramCustomer
+      tags: [customers]
+      summary: Link the verified Telegram identity to a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramLinkInput"
+      responses:
+        "200":
+          description: Linked customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramLink"
+  /telegram/cart:
+    get:
+      operationId: getTelegramCart
+      tags: [orders]
+      summary: Get the verified customer's persistent cart
+      responses:
+        "200":
+          description: Customer cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCart"
+  /telegram/cart/items:
+    post:
+      operationId: upsertTelegramCartItem
+      tags: [orders]
+      summary: Add or replace a persistent cart line
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramCartItemInput"
+      responses:
+        "200":
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCart"
+  /telegram/cart/items/{productId}:
+    delete:
+      operationId: deleteTelegramCartItem
+      tags: [orders]
+      summary: Remove a persistent cart line
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCart"
+  /telegram/cart/checkout:
+    post:
+      operationId: checkoutTelegramCart
+      tags: [orders]
+      summary: Checkout the verified customer's persistent cart
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramOrder"
+  /telegram/orders:
+    get:
+      operationId: listTelegramOrders
+      tags: [orders]
+      summary: List orders belonging to the verified customer
+      responses:
+        "200":
+          description: Customer orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TelegramOrder"
+  /telegram/orders/{orderId}:
+    get:
+      operationId: getTelegramOrder
+      tags: [orders]
+      summary: Get one order belonging to the verified customer
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customer order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramOrder"
 components:
   parameters:
     ProductId:
@@ -307,6 +497,11 @@ components:
         id: { type: string }
         full_name: { type: string }
         phone: { type: string }
+    CustomerLookupResult:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
     CustomerInput:
       type: object
       required: [full_name, phone]
@@ -355,3 +550,82 @@ components:
           required: [role]
           properties:
             role: { type: string }
+    Account:
+      type: object
+      required: [id, email, role]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role: { type: string }
+    TelegramInitData:
+      type: object
+      required: [init_data]
+      properties:
+        init_data: { type: string, minLength: 1, maxLength: 4096 }
+    TelegramVerification:
+      type: object
+      required: [verified, telegram_user_id]
+      properties:
+        verified: { type: boolean }
+        telegram_user_id: { type: string }
+        username: { type: ["string", "null"] }
+    TelegramLinkInput:
+      type: object
+      required: [full_name, phone]
+      properties:
+        full_name: { type: string, minLength: 1, maxLength: 160 }
+        phone: { type: string, minLength: 5, maxLength: 40 }
+        email: { type: ["string", "null"], maxLength: 255 }
+    TelegramLink:
+      type: object
+      required: [linked, customer_id]
+      properties:
+        linked: { type: boolean }
+        customer_id: { type: string }
+    TelegramCartItemInput:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id: { type: string }
+        quantity: { type: number, minimum: 1, maximum: 999 }
+    TelegramCartItem:
+      type: object
+      required: [product_id, product_name, sku, quantity, unit_price, line_total]
+      properties:
+        product_id: { type: string }
+        product_name: { type: string }
+        sku: { type: string }
+        quantity: { type: number }
+        unit_price: { type: string }
+        line_total: { type: string }
+    TelegramCart:
+      type: object
+      required: [customer_id, items, total]
+      properties:
+        customer_id: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelegramCartItem"
+        total: { type: string }
+    TelegramOrderItem:
+      type: object
+      required: [product_id, product_name, sku, quantity, unit_price]
+      properties:
+        product_id: { type: string }
+        product_name: { type: string }
+        sku: { type: string }
+        quantity: { type: number }
+        unit_price: { type: string }
+    TelegramOrder:
+      type: object
+      required: [id, status, total, created_at, items]
+      properties:
+        id: { type: string }
+        status: { type: string }
+        total: { type: string }
+        created_at: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelegramOrderItem"

@@ -20,11 +20,13 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  Account,
   AuthToken,
   Category,
   CategoryInput,
   Customer,
   CustomerInput,
+  CustomerLookupResult,
   HealthStatus,
   Inventory,
   InventoryAdjustment,
@@ -34,7 +36,14 @@ import type {
   OrderInput,
   Product,
   ProductInput,
-  ProductUpdate
+  ProductUpdate,
+  TelegramCart,
+  TelegramCartItemInput,
+  TelegramInitData,
+  TelegramLink,
+  TelegramLinkInput,
+  TelegramOrder,
+  TelegramVerification
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -69,7 +78,7 @@ export const getHealthCheckUrl = () => {
 
 
 
-  return `/api/healthz`
+  return `/api/v1/healthz`
 }
 
 /**
@@ -92,7 +101,7 @@ export const healthCheck = async ( options?: Parameters<typeof customFetch>[1]):
 
 export const getHealthCheckQueryKey = () => {
     return [
-    `/api/healthz`
+    `/api/v1/healthz`
     ] as const;
     }
 
@@ -146,7 +155,7 @@ export const getListCategoriesUrl = () => {
 
 
 
-  return `/api/catalog/categories`
+  return `/api/v1/catalog/categories`
 }
 
 /**
@@ -169,7 +178,7 @@ export const listCategories = async ( options?: Parameters<typeof customFetch>[1
 
 export const getListCategoriesQueryKey = () => {
     return [
-    `/api/catalog/categories`
+    `/api/v1/catalog/categories`
     ] as const;
     }
 
@@ -223,7 +232,7 @@ export const getCreateCategoryUrl = () => {
 
 
 
-  return `/api/catalog/categories`
+  return `/api/v1/catalog/categories`
 }
 
 /**
@@ -294,7 +303,7 @@ export const getListProductsUrl = () => {
 
 
 
-  return `/api/catalog/products`
+  return `/api/v1/catalog/products`
 }
 
 /**
@@ -317,7 +326,7 @@ export const listProducts = async ( options?: Parameters<typeof customFetch>[1])
 
 export const getListProductsQueryKey = () => {
     return [
-    `/api/catalog/products`
+    `/api/v1/catalog/products`
     ] as const;
     }
 
@@ -371,7 +380,7 @@ export const getCreateProductUrl = () => {
 
 
 
-  return `/api/catalog/products`
+  return `/api/v1/catalog/products`
 }
 
 /**
@@ -442,7 +451,7 @@ export const getUpdateProductUrl = (productId: string,) => {
 
 
 
-  return `/api/catalog/products/${productId}`
+  return `/api/v1/catalog/products/${productId}`
 }
 
 /**
@@ -509,12 +518,89 @@ export const useUpdateProduct = <TError = ErrorType<unknown>,
       return useMutation(getUpdateProductMutationOptions(options));
     }
 
+export const getListManagedProductsUrl = () => {
+
+
+
+
+  return `/api/v1/catalog/products/manage`
+}
+
+/**
+ * @summary List active and inactive products for administrators
+ */
+export const listManagedProducts = async ( options?: Parameters<typeof customFetch>[1]): Promise<Product[]> => {
+
+  return customFetch<Product[]>(getListManagedProductsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListManagedProductsQueryKey = () => {
+    return [
+    `/api/v1/catalog/products/manage`
+    ] as const;
+    }
+
+
+export const getListManagedProductsQueryOptions = <TData = Awaited<ReturnType<typeof listManagedProducts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listManagedProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListManagedProductsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listManagedProducts>>> = ({ signal }) => listManagedProducts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listManagedProducts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListManagedProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listManagedProducts>>>
+export type ListManagedProductsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List active and inactive products for administrators
+ */
+
+export function useListManagedProducts<TData = Awaited<ReturnType<typeof listManagedProducts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listManagedProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListManagedProductsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListInventoryUrl = () => {
 
 
 
 
-  return `/api/inventory`
+  return `/api/v1/inventory`
 }
 
 /**
@@ -537,7 +623,7 @@ export const listInventory = async ( options?: Parameters<typeof customFetch>[1]
 
 export const getListInventoryQueryKey = () => {
     return [
-    `/api/inventory`
+    `/api/v1/inventory`
     ] as const;
     }
 
@@ -591,7 +677,7 @@ export const getAdjustInventoryUrl = (productId: string,) => {
 
 
 
-  return `/api/inventory/${productId}/adjust`
+  return `/api/v1/inventory/${productId}/adjust`
 }
 
 /**
@@ -663,7 +749,7 @@ export const getCreateCustomerUrl = () => {
 
 
 
-  return `/api/customers`
+  return `/api/v1/customers`
 }
 
 /**
@@ -741,15 +827,15 @@ export const getLookupCustomerUrl = (params: LookupCustomerParams,) => {
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/customers/lookup?${stringifiedParams}` : `/api/customers/lookup`
+  return stringifiedParams.length > 0 ? `/api/v1/customers/lookup?${stringifiedParams}` : `/api/v1/customers/lookup`
 }
 
 /**
  * @summary Find a customer by phone
  */
-export const lookupCustomer = async (params: LookupCustomerParams, options?: Parameters<typeof customFetch>[1]): Promise<Customer[]> => {
+export const lookupCustomer = async (params: LookupCustomerParams, options?: Parameters<typeof customFetch>[1]): Promise<CustomerLookupResult[]> => {
 
-  return customFetch<Customer[]>(getLookupCustomerUrl(params),
+  return customFetch<CustomerLookupResult[]>(getLookupCustomerUrl(params),
   {
     ...options,
     method: 'GET'
@@ -764,7 +850,7 @@ export const lookupCustomer = async (params: LookupCustomerParams, options?: Par
 
 export const getLookupCustomerQueryKey = (params?: LookupCustomerParams,) => {
     return [
-    `/api/customers/lookup`, ...(params ? [params] : [])
+    `/api/v1/customers/lookup`, ...(params ? [params] : [])
     ] as const;
     }
 
@@ -818,7 +904,7 @@ export const getListOrdersUrl = () => {
 
 
 
-  return `/api/orders`
+  return `/api/v1/orders`
 }
 
 /**
@@ -841,7 +927,7 @@ export const listOrders = async ( options?: Parameters<typeof customFetch>[1]): 
 
 export const getListOrdersQueryKey = () => {
     return [
-    `/api/orders`
+    `/api/v1/orders`
     ] as const;
     }
 
@@ -895,7 +981,7 @@ export const getCreateOrderUrl = () => {
 
 
 
-  return `/api/orders`
+  return `/api/v1/orders`
 }
 
 /**
@@ -966,7 +1052,7 @@ export const getLoginUrl = () => {
 
 
 
-  return `/api/auth/login`
+  return `/api/v1/auth/login`
 }
 
 /**
@@ -1031,4 +1117,809 @@ export const useLogin = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getLoginMutationOptions(options));
     }
+
+export const getRegisterUrl = () => {
+
+
+
+
+  return `/api/v1/auth/register`
+}
+
+/**
+ * @summary Register a new account
+ */
+export const register = async (loginInput: LoginInput, options?: Parameters<typeof customFetch>[1]): Promise<Account> => {
+
+  return customFetch<Account>(getRegisterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(loginInput)
+  }
+);}
+
+
+
+
+
+export const getRegisterMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<LoginInput>}, TContext> => {
+
+const mutationKey = ['register'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof register>>, {data: BodyType<LoginInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  register(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterMutationResult = NonNullable<Awaited<ReturnType<typeof register>>>
+    export type RegisterMutationBody = BodyType<LoginInput>
+    export type RegisterMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Register a new account
+ */
+export const useRegister = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof register>>,
+        TError,
+        {data: BodyType<LoginInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterMutationOptions(options));
+    }
+
+export const getBootstrapAdminUrl = () => {
+
+
+
+
+  return `/api/v1/auth/bootstrap-admin`
+}
+
+/**
+ * @summary Provision the one-time initial administrator with a setup secret
+ */
+export const bootstrapAdmin = async (loginInput: LoginInput, options?: Parameters<typeof customFetch>[1]): Promise<Account> => {
+
+  return customFetch<Account>(getBootstrapAdminUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(loginInput)
+  }
+);}
+
+
+
+
+
+export const getBootstrapAdminMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bootstrapAdmin>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bootstrapAdmin>>, TError,{data: BodyType<LoginInput>}, TContext> => {
+
+const mutationKey = ['bootstrapAdmin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bootstrapAdmin>>, {data: BodyType<LoginInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bootstrapAdmin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BootstrapAdminMutationResult = NonNullable<Awaited<ReturnType<typeof bootstrapAdmin>>>
+    export type BootstrapAdminMutationBody = BodyType<LoginInput>
+    export type BootstrapAdminMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Provision the one-time initial administrator with a setup secret
+ */
+export const useBootstrapAdmin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bootstrapAdmin>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bootstrapAdmin>>,
+        TError,
+        {data: BodyType<LoginInput>},
+        TContext
+      > => {
+      return useMutation(getBootstrapAdminMutationOptions(options));
+    }
+
+export const getGetCurrentUserUrl = () => {
+
+
+
+
+  return `/api/v1/auth/me`
+}
+
+/**
+ * @summary Get the current authenticated account
+ */
+export const getCurrentUser = async ( options?: Parameters<typeof customFetch>[1]): Promise<Account> => {
+
+  return customFetch<Account>(getGetCurrentUserUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCurrentUserQueryKey = () => {
+    return [
+    `/api/v1/auth/me`
+    ] as const;
+    }
+
+
+export const getGetCurrentUserQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCurrentUserQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentUser>>> = ({ signal }) => getCurrentUser({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCurrentUserQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
+export type GetCurrentUserQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the current authenticated account
+ */
+
+export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUser>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentUser>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCurrentUserQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getVerifyTelegramUrl = () => {
+
+
+
+
+  return `/api/v1/auth/telegram/verify`
+}
+
+/**
+ * @summary Verify Telegram WebApp init data
+ */
+export const verifyTelegram = async (telegramInitData: TelegramInitData, options?: Parameters<typeof customFetch>[1]): Promise<TelegramVerification> => {
+
+  return customFetch<TelegramVerification>(getVerifyTelegramUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(telegramInitData)
+  }
+);}
+
+
+
+
+
+export const getVerifyTelegramMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyTelegram>>, TError,{data: BodyType<TelegramInitData>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyTelegram>>, TError,{data: BodyType<TelegramInitData>}, TContext> => {
+
+const mutationKey = ['verifyTelegram'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyTelegram>>, {data: BodyType<TelegramInitData>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  verifyTelegram(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyTelegramMutationResult = NonNullable<Awaited<ReturnType<typeof verifyTelegram>>>
+    export type VerifyTelegramMutationBody = BodyType<TelegramInitData>
+    export type VerifyTelegramMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Verify Telegram WebApp init data
+ */
+export const useVerifyTelegram = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyTelegram>>, TError,{data: BodyType<TelegramInitData>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyTelegram>>,
+        TError,
+        {data: BodyType<TelegramInitData>},
+        TContext
+      > => {
+      return useMutation(getVerifyTelegramMutationOptions(options));
+    }
+
+export const getLinkTelegramCustomerUrl = () => {
+
+
+
+
+  return `/api/v1/telegram/link`
+}
+
+/**
+ * @summary Link the verified Telegram identity to a customer
+ */
+export const linkTelegramCustomer = async (telegramLinkInput: TelegramLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<TelegramLink> => {
+
+  return customFetch<TelegramLink>(getLinkTelegramCustomerUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(telegramLinkInput)
+  }
+);}
+
+
+
+
+
+export const getLinkTelegramCustomerMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkTelegramCustomer>>, TError,{data: BodyType<TelegramLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkTelegramCustomer>>, TError,{data: BodyType<TelegramLinkInput>}, TContext> => {
+
+const mutationKey = ['linkTelegramCustomer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkTelegramCustomer>>, {data: BodyType<TelegramLinkInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  linkTelegramCustomer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkTelegramCustomerMutationResult = NonNullable<Awaited<ReturnType<typeof linkTelegramCustomer>>>
+    export type LinkTelegramCustomerMutationBody = BodyType<TelegramLinkInput>
+    export type LinkTelegramCustomerMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Link the verified Telegram identity to a customer
+ */
+export const useLinkTelegramCustomer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkTelegramCustomer>>, TError,{data: BodyType<TelegramLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkTelegramCustomer>>,
+        TError,
+        {data: BodyType<TelegramLinkInput>},
+        TContext
+      > => {
+      return useMutation(getLinkTelegramCustomerMutationOptions(options));
+    }
+
+export const getGetTelegramCartUrl = () => {
+
+
+
+
+  return `/api/v1/telegram/cart`
+}
+
+/**
+ * @summary Get the verified customer's persistent cart
+ */
+export const getTelegramCart = async ( options?: Parameters<typeof customFetch>[1]): Promise<TelegramCart> => {
+
+  return customFetch<TelegramCart>(getGetTelegramCartUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTelegramCartQueryKey = () => {
+    return [
+    `/api/v1/telegram/cart`
+    ] as const;
+    }
+
+
+export const getGetTelegramCartQueryOptions = <TData = Awaited<ReturnType<typeof getTelegramCart>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramCart>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTelegramCartQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTelegramCart>>> = ({ signal }) => getTelegramCart({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTelegramCart>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTelegramCartQueryResult = NonNullable<Awaited<ReturnType<typeof getTelegramCart>>>
+export type GetTelegramCartQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the verified customer's persistent cart
+ */
+
+export function useGetTelegramCart<TData = Awaited<ReturnType<typeof getTelegramCart>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramCart>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTelegramCartQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertTelegramCartItemUrl = () => {
+
+
+
+
+  return `/api/v1/telegram/cart/items`
+}
+
+/**
+ * @summary Add or replace a persistent cart line
+ */
+export const upsertTelegramCartItem = async (telegramCartItemInput: TelegramCartItemInput, options?: Parameters<typeof customFetch>[1]): Promise<TelegramCart> => {
+
+  return customFetch<TelegramCart>(getUpsertTelegramCartItemUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(telegramCartItemInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertTelegramCartItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertTelegramCartItem>>, TError,{data: BodyType<TelegramCartItemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertTelegramCartItem>>, TError,{data: BodyType<TelegramCartItemInput>}, TContext> => {
+
+const mutationKey = ['upsertTelegramCartItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertTelegramCartItem>>, {data: BodyType<TelegramCartItemInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertTelegramCartItem(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertTelegramCartItemMutationResult = NonNullable<Awaited<ReturnType<typeof upsertTelegramCartItem>>>
+    export type UpsertTelegramCartItemMutationBody = BodyType<TelegramCartItemInput>
+    export type UpsertTelegramCartItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add or replace a persistent cart line
+ */
+export const useUpsertTelegramCartItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertTelegramCartItem>>, TError,{data: BodyType<TelegramCartItemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertTelegramCartItem>>,
+        TError,
+        {data: BodyType<TelegramCartItemInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertTelegramCartItemMutationOptions(options));
+    }
+
+export const getDeleteTelegramCartItemUrl = (productId: string,) => {
+
+
+
+
+  return `/api/v1/telegram/cart/items/${productId}`
+}
+
+/**
+ * @summary Remove a persistent cart line
+ */
+export const deleteTelegramCartItem = async (productId: string, options?: Parameters<typeof customFetch>[1]): Promise<TelegramCart> => {
+
+  return customFetch<TelegramCart>(getDeleteTelegramCartItemUrl(productId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTelegramCartItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTelegramCartItem>>, TError,{productId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTelegramCartItem>>, TError,{productId: string}, TContext> => {
+
+const mutationKey = ['deleteTelegramCartItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTelegramCartItem>>, {productId: string}> = (props) => {
+          const {productId} = props ?? {};
+
+          return  deleteTelegramCartItem(productId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTelegramCartItemMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTelegramCartItem>>>
+
+    export type DeleteTelegramCartItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove a persistent cart line
+ */
+export const useDeleteTelegramCartItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTelegramCartItem>>, TError,{productId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTelegramCartItem>>,
+        TError,
+        {productId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteTelegramCartItemMutationOptions(options));
+    }
+
+export const getCheckoutTelegramCartUrl = () => {
+
+
+
+
+  return `/api/v1/telegram/cart/checkout`
+}
+
+/**
+ * @summary Checkout the verified customer's persistent cart
+ */
+export const checkoutTelegramCart = async ( options?: Parameters<typeof customFetch>[1]): Promise<TelegramOrder> => {
+
+  return customFetch<TelegramOrder>(getCheckoutTelegramCartUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCheckoutTelegramCartMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkoutTelegramCart>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkoutTelegramCart>>, TError,void, TContext> => {
+
+const mutationKey = ['checkoutTelegramCart'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkoutTelegramCart>>, void> = () => {
+
+
+          return  checkoutTelegramCart(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckoutTelegramCartMutationResult = NonNullable<Awaited<ReturnType<typeof checkoutTelegramCart>>>
+
+    export type CheckoutTelegramCartMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Checkout the verified customer's persistent cart
+ */
+export const useCheckoutTelegramCart = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkoutTelegramCart>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof checkoutTelegramCart>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCheckoutTelegramCartMutationOptions(options));
+    }
+
+export const getListTelegramOrdersUrl = () => {
+
+
+
+
+  return `/api/v1/telegram/orders`
+}
+
+/**
+ * @summary List orders belonging to the verified customer
+ */
+export const listTelegramOrders = async ( options?: Parameters<typeof customFetch>[1]): Promise<TelegramOrder[]> => {
+
+  return customFetch<TelegramOrder[]>(getListTelegramOrdersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTelegramOrdersQueryKey = () => {
+    return [
+    `/api/v1/telegram/orders`
+    ] as const;
+    }
+
+
+export const getListTelegramOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listTelegramOrders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTelegramOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTelegramOrdersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTelegramOrders>>> = ({ signal }) => listTelegramOrders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTelegramOrders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTelegramOrdersQueryResult = NonNullable<Awaited<ReturnType<typeof listTelegramOrders>>>
+export type ListTelegramOrdersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List orders belonging to the verified customer
+ */
+
+export function useListTelegramOrders<TData = Awaited<ReturnType<typeof listTelegramOrders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTelegramOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTelegramOrdersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetTelegramOrderUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/v1/telegram/orders/${orderId}`
+}
+
+/**
+ * @summary Get one order belonging to the verified customer
+ */
+export const getTelegramOrder = async (orderId: string, options?: Parameters<typeof customFetch>[1]): Promise<TelegramOrder> => {
+
+  return customFetch<TelegramOrder>(getGetTelegramOrderUrl(orderId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTelegramOrderQueryKey = (orderId: string,) => {
+    return [
+    `/api/v1/telegram/orders/${orderId}`
+    ] as const;
+    }
+
+
+export const getGetTelegramOrderQueryOptions = <TData = Awaited<ReturnType<typeof getTelegramOrder>>, TError = ErrorType<unknown>>(orderId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTelegramOrderQueryKey(orderId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTelegramOrder>>> = ({ signal }) => getTelegramOrder(orderId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: orderId !== null && orderId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTelegramOrder>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTelegramOrderQueryResult = NonNullable<Awaited<ReturnType<typeof getTelegramOrder>>>
+export type GetTelegramOrderQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get one order belonging to the verified customer
+ */
+
+export function useGetTelegramOrder<TData = Awaited<ReturnType<typeof getTelegramOrder>>, TError = ErrorType<unknown>>(
+ orderId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTelegramOrderQueryOptions(orderId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
