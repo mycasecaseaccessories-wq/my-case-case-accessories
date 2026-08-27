@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { calculateSubtotal, clampQuantity, money } from "./cart-utils";
+
 type Product = {
   id: string;
   name: string;
@@ -15,10 +17,6 @@ type CartLine = { product: Product; quantity: number };
 
 const API = (process.env.NEXT_PUBLIC_CENTRAL_API_BASE_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
 
-function money(value: string | number) {
-  return `${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })} MMK`;
-}
-
 export default function MiniAppPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -27,18 +25,28 @@ export default function MiniAppPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const [validationError, setValidationError] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [orderMessage, setOrderMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [cartError, setCartError] = useState("");
   const [sessionState, setSessionState] = useState<"checking" | "verified" | "unavailable" | "invalid">("checking");
   const [initData, setInitData] = useState("");
-  const [orders, setOrders] = useState<Array<{ id: string; status: string; total: string | number }>>([]);
+  const [orders, setOrders] = useState<
+    Array<{ id: string; status: string; total: string | number; created_at?: string }>
+  >([]);
   const [ordersOpen, setOrdersOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<{ id: string; status: string; total: string | number } | null>(
-    null,
-  );
+  const [selectedOrder, setSelectedOrder] = useState<{
+    id: string;
+    status: string;
+    total: string | number;
+    created_at?: string;
+    items?: Array<{ product_name: string; quantity: number; unit_price: string | number }>;
+  } | null>(null);
 
   function telegramHeaders(): Record<string, string> {
     return initData ? { "X-Telegram-Init-Data": initData } : {};
@@ -121,14 +129,14 @@ export default function MiniAppPage() {
       ),
     [products, query, category],
   );
-  const total = cart.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0);
+  const total = calculateSubtotal(cart);
 
   function add(product: Product) {
     setCart((current) => {
       const existing = current.find((line) => line.product.id === product.id);
       if (existing)
         return current.map((line) =>
-          line.product.id === product.id ? { ...line, quantity: Math.min(line.quantity + 1, 999) } : line,
+          line.product.id === product.id ? { ...line, quantity: clampQuantity(line.quantity + 1) } : line,
         );
       return [...current, { product, quantity: 1 }];
     });
@@ -139,7 +147,7 @@ export default function MiniAppPage() {
       current.flatMap((line) =>
         line.product.id === productId
           ? line.quantity + delta > 0 && line.quantity + delta <= 999
-            ? [{ ...line, quantity: line.quantity + delta }]
+            ? [{ ...line, quantity: clampQuantity(line.quantity + delta) }]
             : line.quantity + delta <= 0
               ? []
               : [line]
@@ -148,8 +156,19 @@ export default function MiniAppPage() {
     );
   }
   async function checkout() {
-    if (!name.trim() || !phone.trim() || !cart.length) return;
+    if (submitting) return;
+    if (!name.trim() || !phone.trim()) {
+      setValidationError("Customer name နှင့် phone ထည့်ပေးပါ။");
+      return;
+    }
+    if (!cart.length) {
+      setValidationError("Checkout မလုပ်မီ cart ထဲသို့ product ထည့်ပေးပါ။");
+      return;
+    }
+    setValidationError("");
+    setSubmitting(true);
     setOrderMessage("Order တင်နေပါတယ်...");
+    setCartError("");
     try {
       if (sessionState === "verified") {
         const linkResponse = await fetch(`${API}/telegram/link`, {
@@ -206,6 +225,8 @@ export default function MiniAppPage() {
       setOrderMessage(
         "Order မအောင်မြင်ပါ။ Stock၊ Telegram link နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။",
       );
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -256,9 +277,12 @@ export default function MiniAppPage() {
           </div>
         </section>
         {error && (
-          <p className="notice" role="alert">
-            {error}
-          </p>
+          <div className="notice" role="alert">
+            <p>{error}</p>
+            <button className="secondary" onClick={() => window.location.reload()} type="button">
+              Retry catalog
+            </button>
+          </div>
         )}
         {sessionState === "invalid" && (
           <p className="notice" role="alert">
@@ -306,9 +330,19 @@ export default function MiniAppPage() {
             <p>
               Status: <strong>{selectedOrder.status}</strong>
             </p>
+            <p>Date: {selectedOrder.created_at || "—"}</p>
             <p>
               Total: <strong>{money(selectedOrder.total)}</strong>
             </p>
+            {!!selectedOrder.items?.length && (
+              <div className="order-items">
+                {selectedOrder.items.map((item) => (
+                  <p key={`${item.product_name}-${item.quantity}`}>
+                    {item.product_name} × {item.quantity} · {money(item.unit_price)}
+                  </p>
+                ))}
+              </div>
+            )}
           </section>
         )}
         {cartOpen && (
@@ -340,11 +374,52 @@ export default function MiniAppPage() {
                   </div>
                 ))}
                 <strong>Total: {money(total)}</strong>
+                {cart.some((line) => !products.some((product) => product.id === line.product.id)) && (
+                  <p className="notice" role="alert">
+                    Cart ထဲမှာ catalog မှ ဖယ်ရှားထားသော product ရှိနေပါတယ်။ Checkout မလုပ်မီ ဖယ်ရှားပေးပါ။
+                  </p>
+                )}
+                {cartError && (
+                  <p className="notice" role="alert">
+                    {cartError}
+                  </p>
+                )}
+                <button className="secondary" onClick={() => setCart([])} type="button">
+                  Clear cart
+                </button>
                 <div className="form">
-                  <input placeholder="Customer name" value={name} onChange={(event) => setName(event.target.value)} />
-                  <input placeholder="Phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
-                  <button className="primary" onClick={checkout} disabled={!name.trim() || !phone.trim()}>
-                    Checkout
+                  <input
+                    placeholder="Customer name"
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      setValidationError("");
+                    }}
+                  />
+                  <input
+                    placeholder="Phone"
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value);
+                      setValidationError("");
+                    }}
+                  />
+                  {validationError && (
+                    <p className="notice" role="alert">
+                      {validationError}
+                    </p>
+                  )}
+                  <button
+                    className="primary"
+                    onClick={() => void checkout()}
+                    disabled={
+                      !name.trim() ||
+                      !phone.trim() ||
+                      submitting ||
+                      cart.some((line) => !products.some((product) => product.id === line.product.id))
+                    }
+                  >
+                    {submitting ? "Submitting..." : "Checkout"}
                   </button>
                   {orderMessage && <p role="status">{orderMessage}</p>}
                 </div>
@@ -367,7 +442,13 @@ export default function MiniAppPage() {
                 <p>{product.description || "Quality everyday accessory"}</p>
                 <span className="price">{money(product.price)}</span>
                 <span className="sku">SKU: {product.sku}</span>
-                <button className="secondary" onClick={() => setSelected(product)}>
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    setSelected(product);
+                    setSelectedQuantity(1);
+                  }}
+                >
                   View details
                 </button>
                 <button className="primary" onClick={() => add(product)}>
@@ -383,13 +464,24 @@ export default function MiniAppPage() {
               Close
             </button>
             <h2>{selected.name}</h2>
+
             <p>{selected.description || "Quality everyday accessory"}</p>
             <strong>{money(selected.price)}</strong>
             <span className="sku">SKU: {selected.sku}</span>
+            <div className="qty" aria-label="Product quantity">
+              <button onClick={() => setSelectedQuantity((value) => Math.max(1, value - 1))} type="button">
+                −
+              </button>
+              <span>{selectedQuantity}</span>
+              <button onClick={() => setSelectedQuantity((value) => Math.min(999, value + 1))} type="button">
+                +
+              </button>
+            </div>
             <button
               className="primary"
               onClick={() => {
-                add(selected);
+                for (let index = 0; index < selectedQuantity; index += 1) add(selected);
+                setSelectedQuantity(1);
                 setSelected(null);
               }}
             >
