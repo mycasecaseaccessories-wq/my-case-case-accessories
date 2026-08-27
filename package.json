@@ -1,23 +1,19 @@
 {
-  "name": "my-case-v1",
-  "private": true,
-  "version": "0.1.0",
-  "description": "My Case v1 modular monolith foundation",
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
   "scripts": {
-    "format:check": "prettier --check .",
-    "format": "prettier --write .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude tests/e2e/**",
-    "test:e2e": "playwright test",
-    "build": "pnpm --filter website build && pnpm --filter admin build && pnpm --filter pos build",
-    "build:mini-app": "pnpm --filter mini-app build",
-    "test:mini-app": "pnpm --filter mini-app test"
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+  },
+  "private": true,
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.4.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "prettier": "^3.6.2",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
-  },
-  "packageManager": "pnpm@10.15.0"
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+  }
 }
