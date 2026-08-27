@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface Inventory {
+  product_id: string;
+  quantity: number;
+  reorder_level: number;
+  low_stock: boolean;
 }

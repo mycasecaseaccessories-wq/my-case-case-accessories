@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "My Case Commerce"
+description = "A customer storefront and operations workspace for My Case accessories, with catalog browsing, cart checkout, admin inventory tools, and point-of-sale workflows."
+version = "1.0.0"
+id = "artifacts/my-case"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24311
+
+[services.development]
+run = "pnpm --filter @workspace/my-case run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/my-case", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/my-case/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24311"
+BASE_PATH = "/"

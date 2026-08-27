@@ -5,7 +5,9 @@
  * My Case commerce API
  * OpenAPI spec version: 0.1.0
  */
+import type { AuthTokenUser } from './authTokenUser';
 
-export interface HealthStatus {
-  status: string;
+export interface AuthToken {
+  access_token: string;
+  user: AuthTokenUser;
 }

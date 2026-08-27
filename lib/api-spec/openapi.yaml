@@ -1,22 +1,24 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: My Case commerce API
 servers:
-  - url: /api
-    description: Base API path
+  - url: /api/v1
+    description: Versioned commerce API
 tags:
   - name: health
-    description: Health operations
+  - name: catalog
+  - name: inventory
+  - name: customers
+  - name: orders
+  - name: auth
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +26,332 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /catalog/categories:
+    get:
+      operationId: listCategories
+      tags: [catalog]
+      summary: List active catalog categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [catalog]
+      summary: Create a category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+  /catalog/products:
+    get:
+      operationId: listProducts
+      tags: [catalog]
+      summary: List active products
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [catalog]
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /catalog/products/{productId}:
+    patch:
+      operationId: updateProduct
+      tags: [catalog]
+      summary: Update product status
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /inventory:
+    get:
+      operationId: listInventory
+      tags: [inventory]
+      summary: List inventory
+      responses:
+        "200":
+          description: Inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Inventory"
+  /inventory/{productId}/adjust:
+    post:
+      operationId: adjustInventory
+      tags: [inventory]
+      summary: Adjust product inventory
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryAdjustment"
+      responses:
+        "200":
+          description: Updated inventory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inventory"
+  /customers:
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create or register a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+      responses:
+        "201":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /customers/lookup:
+    get:
+      operationId: lookupCustomer
+      tags: [customers]
+      summary: Find a customer by phone
+      parameters:
+        - name: phone
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List recent orders
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in an admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
 components:
+  parameters:
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
-
+    Category:
+      type: object
+      required: [id, name, slug, is_active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: ["string", "null"] }
+        is_active: { type: boolean }
+    CategoryInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string, minLength: 1 }
+        slug: { type: string, minLength: 1 }
+    Product:
+      type: object
+      required: [id, category_id, name, slug, sku, price, is_active]
+      properties:
+        id: { type: string }
+        category_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        sku: { type: string }
+        description: { type: ["string", "null"] }
+        price: { type: string }
+        is_active: { type: boolean }
+    ProductInput:
+      type: object
+      required: [category_id, name, slug, sku, price]
+      properties:
+        category_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        sku: { type: string }
+        price: { type: string }
+        description: { type: string }
+    ProductUpdate:
+      type: object
+      required: [is_active]
+      properties:
+        is_active: { type: boolean }
+    Inventory:
+      type: object
+      required: [product_id, quantity, reorder_level, low_stock]
+      properties:
+        product_id: { type: string }
+        quantity: { type: number }
+        reorder_level: { type: number }
+        low_stock: { type: boolean }
+    InventoryAdjustment:
+      type: object
+      required: [delta, reason]
+      properties:
+        delta: { type: number }
+        reason: { type: string }
+    Customer:
+      type: object
+      required: [id, full_name, phone]
+      properties:
+        id: { type: string }
+        full_name: { type: string }
+        phone: { type: string }
+    CustomerInput:
+      type: object
+      required: [full_name, phone]
+      properties:
+        full_name: { type: string }
+        phone: { type: string }
+    OrderItemInput:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id: { type: string }
+        quantity: { type: number, minimum: 1 }
+    OrderInput:
+      type: object
+      required: [customer_id, customer_name, customer_phone, items]
+      properties:
+        customer_id: { type: string }
+        customer_name: { type: string }
+        customer_phone: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItemInput"
+    Order:
+      type: object
+      required: [id, status, total, customer_name, customer_phone]
+      properties:
+        id: { type: string }
+        status: { type: string }
+        total: { type: string }
+        customer_name: { type: string }
+        customer_phone: { type: string }
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string, minLength: 8 }
+    AuthToken:
+      type: object
+      required: [access_token, user]
+      properties:
+        access_token: { type: string }
+        user:
+          type: object
+          required: [role]
+          properties:
+            role: { type: string }
