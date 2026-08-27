@@ -16,7 +16,7 @@ from .catalog_models import Product
 from .customer_models import Customer
 from .database import get_session
 from .orders import Order, OrderItem, create_order_records
-from .telegram_models import TelegramIdentity
+from .telegram_models import ExternalIdentity
 
 router = APIRouter(prefix="/telegram", tags=["telegram-customer"])
 
@@ -67,7 +67,7 @@ async def _telegram_user(
     init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
     bot_token: str | None = Header(default=None, alias="X-Telegram-Bot-Token"),
     bot_user_id: str | None = Header(default=None, alias="X-Telegram-User-Id"),
-) -> tuple[str, str | None]:
+) -> str:
     configured = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if init_data:
         if not configured:
@@ -78,13 +78,13 @@ async def _telegram_user(
             telegram_id = str(payload.get("id", "")).strip()
             if not telegram_id:
                 raise ValueError
-            return telegram_id, payload.get("username")
+            return telegram_id
         except (ValueError, TypeError, json.JSONDecodeError):
             raise HTTPException(status_code=401, detail="Invalid Telegram session")
     if bot_token and bot_user_id and configured and hmac_compare(bot_token, configured):
         if not bot_user_id.isdigit():
             raise HTTPException(status_code=401, detail="Invalid Telegram identity")
-        return bot_user_id, None
+        return bot_user_id
     raise HTTPException(status_code=401, detail="Telegram authentication required")
 
 
@@ -95,12 +95,11 @@ def hmac_compare(left: str, right: str) -> bool:
 
 
 async def _identity_customer(
-    identity: tuple[str, str | None] = Depends(_telegram_user), session: AsyncSession = Depends(get_session)
-) -> tuple[TelegramIdentity, Customer]:
-    telegram_id, username = identity
+    telegram_id: str = Depends(_telegram_user), session: AsyncSession = Depends(get_session)
+) -> tuple[ExternalIdentity, Customer]:
     record = await session.scalar(
-        select(TelegramIdentity).where(
-            TelegramIdentity.provider == "telegram", TelegramIdentity.provider_user_id == telegram_id
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "telegram", ExternalIdentity.provider_subject == telegram_id
         )
     )
     if record is None:
@@ -108,22 +107,18 @@ async def _identity_customer(
     customer = await session.get(Customer, record.customer_id)
     if customer is None:
         raise HTTPException(status_code=409, detail="Telegram customer link is invalid")
-    if username and record.username != username:
-        record.username = username
-        await session.commit()
     return record, customer
 
 
 @router.post("/link", status_code=status.HTTP_200_OK)
 async def link_telegram_customer(
     payload: TelegramLinkRequest,
-    identity: tuple[str, str | None] = Depends(_telegram_user),
+    telegram_id: str = Depends(_telegram_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
-    telegram_id, username = identity
     existing = await session.scalar(
-        select(TelegramIdentity).where(
-            TelegramIdentity.provider == "telegram", TelegramIdentity.provider_user_id == telegram_id
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "telegram", ExternalIdentity.provider_subject == telegram_id
         )
     )
     matches = list(
@@ -148,9 +143,7 @@ async def link_telegram_customer(
         raise HTTPException(status_code=409, detail="Customer identity conflict")
     session.add(customer)
     await session.flush()
-    record = TelegramIdentity(
-        provider="telegram", provider_user_id=telegram_id, username=username, customer_id=customer.id
-    )
+    record = ExternalIdentity(provider="telegram", provider_subject=telegram_id, customer_id=customer.id)
     session.add(record)
     try:
         await session.commit()
@@ -196,7 +189,7 @@ async def _cart_read(session: AsyncSession, customer_id: UUID) -> CartRead:
 
 @router.get("/cart", response_model=CartRead)
 async def read_cart(
-    pair: tuple[TelegramIdentity, Customer] = Depends(_identity_customer), session: AsyncSession = Depends(get_session)
+    pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer), session: AsyncSession = Depends(get_session)
 ) -> CartRead:
     return await _cart_read(session, pair[1].id)
 
@@ -204,7 +197,7 @@ async def read_cart(
 @router.post("/cart/items", response_model=CartRead)
 async def upsert_cart_item(
     payload: CartLineRequest,
-    pair: tuple[TelegramIdentity, Customer] = Depends(_identity_customer),
+    pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> CartRead:
     product = await session.get(Product, payload.product_id)
@@ -225,7 +218,7 @@ async def upsert_cart_item(
 @router.delete("/cart/items/{product_id}", response_model=CartRead)
 async def delete_cart_item(
     product_id: UUID,
-    pair: tuple[TelegramIdentity, Customer] = Depends(_identity_customer),
+    pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> CartRead:
     cart = await _get_cart(session, pair[1].id)
@@ -265,7 +258,7 @@ async def _customer_order_payload(session: AsyncSession, order: Order) -> dict[s
 @router.post("/cart/checkout", response_model=CustomerOrderRead, status_code=status.HTTP_201_CREATED)
 async def checkout_cart(
     checkout_key: str | None = Header(default=None, alias="X-Checkout-Idempotency-Key"),
-    pair: tuple[TelegramIdentity, Customer] = Depends(_identity_customer),
+    pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     if checkout_key is not None and (not checkout_key.strip() or len(checkout_key) > 128):
@@ -305,7 +298,7 @@ async def checkout_cart(
 async def customer_orders(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
-    pair: tuple[TelegramIdentity, Customer] = Depends(_identity_customer),
+    pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     result = await session.execute(
@@ -321,7 +314,7 @@ async def customer_orders(
 @router.get("/orders/{order_id}", response_model=CustomerOrderRead)
 async def customer_order(
     order_id: UUID,
-    pair: tuple[TelegramIdentity, Customer] = Depends(_identity_customer),
+    pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     order = await session.scalar(select(Order).where(Order.id == order_id, Order.customer_id == pair[1].id))

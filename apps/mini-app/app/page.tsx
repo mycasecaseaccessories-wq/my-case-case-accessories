@@ -35,6 +35,7 @@ export default function MiniAppPage() {
   const [submitting, setSubmitting] = useState(false);
   const [cartError, setCartError] = useState("");
   const [sessionState, setSessionState] = useState<"checking" | "verified" | "unavailable" | "invalid">("checking");
+  const [accountState, setAccountState] = useState<"unknown" | "linked" | "unlinked">("unknown");
   const [initData, setInitData] = useState("");
   const [orders, setOrders] = useState<
     Array<{ id: string; status: string; total: string | number; created_at?: string }>
@@ -70,6 +71,15 @@ export default function MiniAppPage() {
         .then(async (response) => {
           setSessionState(response.ok ? "verified" : "invalid");
           if (response.ok) {
+            const accountResponse = await fetch(`${API}/auth/telegram/me`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ init_data: webApp.initData || "" }),
+            });
+            if (accountResponse.ok) {
+              const account = await accountResponse.json();
+              setAccountState(account.linked ? "linked" : "unlinked");
+            }
             const cartResponse = await fetch(`${API}/telegram/cart`, {
               headers: { "X-Telegram-Init-Data": webApp.initData || "" },
             });
@@ -287,6 +297,11 @@ export default function MiniAppPage() {
         {sessionState === "invalid" && (
           <p className="notice" role="alert">
             Telegram session ကို အတည်ပြုမရသေးပါ။ Customer account/order history များကို မပြသပါ။
+          </p>
+        )}
+        {sessionState === "verified" && accountState === "unlinked" && (
+          <p className="notice" role="status">
+            Telegram account ကို canonical Customer နဲ့ မချိတ်ရသေးပါ။ Account linking ပြီးမှ customer-owned features အသုံးပြုနိုင်ပါမယ်။
           </p>
         )}
         {ordersOpen && (

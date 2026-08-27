@@ -1,5 +1,5 @@
 from apps.api.app.customer_channel import router
-from apps.api.app.telegram_models import TelegramIdentity
+from apps.api.app.telegram_models import ExternalIdentity
 from fastapi.routing import APIRoute
 
 
@@ -14,14 +14,14 @@ def test_customer_channel_routes_are_registered() -> None:
 
 
 def test_external_identity_uses_provider_neutral_fields() -> None:
-    columns = TelegramIdentity.__table__.columns
+    columns = ExternalIdentity.__table__.columns
     assert "provider" in columns
-    assert "provider_user_id" in columns
+    assert "provider_subject" in columns
     assert "customer_id" in columns
 
 
-def test_checkout_migration_is_forward_from_0006() -> None:
+def test_identity_migration_is_forward_from_0007() -> None:
     migration = __import__(
-        "apps.api.alembic.versions.0007_external_identity_checkout_idempotency", fromlist=["revision"]
+        "apps.api.alembic.versions.0008_t4_external_identity_account", fromlist=["revision"]
     )
-    assert migration.down_revision == "0006_telegram_identity_and_carts"
+    assert migration.down_revision == "0007_external_identity_checkout_idempotency"

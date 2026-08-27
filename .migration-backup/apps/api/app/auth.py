@@ -4,18 +4,22 @@ import hmac
 import json
 import os
 import time
+from datetime import UTC, datetime
 from urllib.parse import parse_qsl
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, String, select
+from sqlalchemy import Boolean, ForeignKey, String, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .catalog_models import Base
 from .config import settings
+from .customer_models import Customer
 from .database import get_session
+from .telegram_models import ExternalIdentity
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -32,6 +36,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(30), default="customer", server_default="customer")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    customer_id: Mapped[UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
 
 class Credentials(BaseModel):
     email: str
@@ -50,6 +55,12 @@ class TokenRead(BaseModel):
 
 class TelegramInitData(BaseModel):
     init_data: str = Field(min_length=1, max_length=4096)
+
+
+class TelegramAccountLinkRequest(BaseModel):
+    init_data: str = Field(min_length=1, max_length=4096)
+    full_name: str | None = Field(default=None, min_length=1, max_length=160)
+    phone: str | None = Field(default=None, min_length=5, max_length=40)
 
 
 def _validate_telegram_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86400) -> dict[str, str]:
@@ -131,17 +142,81 @@ def require_roles(*roles: str):
         return user
     return dependency
 
-@router.post("/telegram/verify")
-async def verify_telegram_init_data(payload: TelegramInitData) -> dict[str, object]:
+async def _verified_telegram_subject(init_data: str) -> tuple[str, str | None]:
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if not bot_token:
         raise HTTPException(status_code=503, detail="Telegram authentication is not configured")
     try:
-        pairs = _validate_telegram_init_data(payload.init_data, bot_token)
+        pairs = _validate_telegram_init_data(init_data, bot_token)
         user_payload = json.loads(pairs.get("user", "{}"))
-        return {"verified": True, "telegram_user_id": user_payload.get("id"), "username": user_payload.get("username")}
+        subject = str(user_payload.get("id", "")).strip()
+        if not subject.isdigit():
+            raise ValueError("Telegram identity is missing")
+        return subject, user_payload.get("username")
     except (ValueError, TypeError, json.JSONDecodeError):
         raise HTTPException(status_code=401, detail="Invalid Telegram session")
+
+
+@router.post("/telegram/verify")
+async def verify_telegram_init_data(payload: TelegramInitData) -> dict[str, object]:
+    subject, username = await _verified_telegram_subject(payload.init_data)
+    return {"verified": True, "telegram_user_id": subject, "username": username}
+
+
+@router.post("/telegram/link")
+async def link_telegram_account(
+    payload: TelegramAccountLinkRequest,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    subject, _ = await _verified_telegram_subject(payload.init_data)
+    identity = await session.scalar(
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "telegram", ExternalIdentity.provider_subject == subject
+        )
+    )
+    if identity is not None:
+        if user.customer_id is None or identity.customer_id != user.customer_id:
+            raise HTTPException(status_code=409, detail="Telegram account is already linked to another customer")
+        identity.last_verified_at = datetime.now(UTC)
+        await session.commit()
+        return {"linked": True, "customer_id": str(identity.customer_id)}
+    customer = await session.get(Customer, user.customer_id) if user.customer_id else None
+    if customer is None:
+        customer = await session.scalar(select(Customer).where(Customer.email == user.email))
+    if customer is None:
+        raise HTTPException(status_code=409, detail="Customer account provisioning is required before linking")
+    if payload.phone and customer.phone and payload.phone.strip() != customer.phone:
+        raise HTTPException(status_code=409, detail="Customer identity conflict")
+    if payload.full_name and payload.full_name.strip() != customer.full_name:
+        raise HTTPException(status_code=409, detail="Customer identity conflict")
+    if user.customer_id is None:
+        user.customer_id = customer.id
+    session.add(ExternalIdentity(provider="telegram", provider_subject=subject, customer_id=customer.id))
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Telegram identity is already linked") from exc
+    return {"linked": True, "customer_id": str(customer.id)}
+
+
+@router.get("/telegram/me")
+async def telegram_me(payload: TelegramInitData, session: AsyncSession = Depends(get_session)) -> dict[str, object]:
+    subject, username = await _verified_telegram_subject(payload.init_data)
+    identity = await session.scalar(
+        select(ExternalIdentity).where(
+            ExternalIdentity.provider == "telegram", ExternalIdentity.provider_subject == subject
+        )
+    )
+    if identity is None:
+        return {"verified": True, "linked": False, "telegram_user_id": subject, "username": username}
+    customer = await session.get(Customer, identity.customer_id)
+    if customer is None:
+        raise HTTPException(status_code=409, detail="Telegram customer link is invalid")
+    identity.last_verified_at = datetime.now(UTC)
+    await session.commit()
+    return {"verified": True, "linked": True, "telegram_user_id": subject, "customer_id": str(customer.id)}
 
 
 @router.get("/me", response_model=UserRead)
