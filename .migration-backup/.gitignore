@@ -1,0 +1,41 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local data
+*.sqlite3
+postgres-data/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Generated
+*.log
+*.egg-info/
+*.tsbuildinfo
+.pytest_cache/
+.ruff_cache/
+test-results/
+playwright-report/
