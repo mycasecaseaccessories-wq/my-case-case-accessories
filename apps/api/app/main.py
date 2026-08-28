@@ -18,6 +18,7 @@ from . import (
     telegram_models,  # noqa: F401
 )
 from .auth import router as auth_router
+from .cart import router as cart_router
 from .catalog import router as catalog_router
 from .catalog_models import Base
 from .config import settings
@@ -125,5 +126,6 @@ app.include_router(catalog_router, prefix=settings.api_v1_prefix)
 app.include_router(inventory_router, prefix=settings.api_v1_prefix)
 app.include_router(orders_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(cart_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_channel_router, prefix=settings.api_v1_prefix)

@@ -162,7 +162,9 @@ class TelegramCommerceBot:
                             return "Telegram account ကို authenticated Customer account နဲ့ link ပြီးမှ checkout လုပ်နိုင်ပါမယ်။"
                         raise
                 else:
-                    customer = await self.api.find_or_create_customer(parts[0], parts[1])
+                    customer = await self.api.find_or_create_customer(
+                        parts[0], parts[1]
+                    )
                     customer_id = UUID(str(customer["id"]))
                     order = await self.api.create_order(
                         customer_id,

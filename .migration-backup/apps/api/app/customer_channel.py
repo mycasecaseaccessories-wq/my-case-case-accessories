@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import _validate_telegram_init_data
 from .cart_models import Cart, CartItem
+from .cart_service import CartService
 from .catalog_models import Product
 from .customer_models import Customer
 from .database import get_session
@@ -163,35 +164,14 @@ async def _get_cart(session: AsyncSession, customer_id: UUID) -> Cart:
 
 
 async def _cart_read(session: AsyncSession, customer_id: UUID) -> CartRead:
-    cart = await _get_cart(session, customer_id)
-    rows = await session.execute(
-        select(CartItem, Product).join(Product, Product.id == CartItem.product_id).where(CartItem.cart_id == cart.id)
-    )
-    items: list[CartItemRead] = []
-    total = Decimal(0)
-    for item, product in rows.all():
-        if not product.is_active:
-            continue
-        line_total = product.price * item.quantity
-        total += line_total
-        items.append(
-            CartItemRead(
-                product_id=product.id,
-                product_name=product.name,
-                sku=product.sku,
-                quantity=item.quantity,
-                unit_price=product.price,
-                line_total=line_total,
-            )
-        )
-    return CartRead(customer_id=customer_id, items=items, total=total)
+    return CartRead.model_validate(await CartService(session).read(customer_id))
 
 
 @router.get("/cart", response_model=CartRead)
 async def read_cart(
     pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer), session: AsyncSession = Depends(get_session)
 ) -> CartRead:
-    return await _cart_read(session, pair[1].id)
+    return CartRead.model_validate(await CartService(session).read(pair[1].id))
 
 
 @router.post("/cart/items", response_model=CartRead)
@@ -200,19 +180,9 @@ async def upsert_cart_item(
     pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> CartRead:
-    product = await session.get(Product, payload.product_id)
-    if product is None or not product.is_active:
-        raise HTTPException(status_code=404, detail="Product unavailable")
-    cart = await _get_cart(session, pair[1].id)
-    item = await session.scalar(
-        select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == payload.product_id).with_for_update()
+    return CartRead.model_validate(
+        await CartService(session).set_product(pair[1].id, payload.product_id, payload.quantity)
     )
-    if item is None:
-        session.add(CartItem(cart_id=cart.id, product_id=payload.product_id, quantity=payload.quantity))
-    else:
-        item.quantity = payload.quantity
-    await session.commit()
-    return await _cart_read(session, pair[1].id)
 
 
 @router.delete("/cart/items/{product_id}", response_model=CartRead)
@@ -221,14 +191,7 @@ async def delete_cart_item(
     pair: tuple[ExternalIdentity, Customer] = Depends(_identity_customer),
     session: AsyncSession = Depends(get_session),
 ) -> CartRead:
-    cart = await _get_cart(session, pair[1].id)
-    item = await session.scalar(
-        select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == product_id).with_for_update()
-    )
-    if item is not None:
-        await session.delete(item)
-        await session.commit()
-    return await _cart_read(session, pair[1].id)
+    return CartRead.model_validate(await CartService(session).remove_product(pair[1].id, product_id))
 
 
 async def _customer_order_payload(session: AsyncSession, order: Order) -> dict[str, Any]:
