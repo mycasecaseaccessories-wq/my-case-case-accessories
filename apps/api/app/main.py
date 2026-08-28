@@ -24,6 +24,7 @@ from .catalog_models import Base
 from .config import settings
 from .customer import router as customer_router
 from .customer_channel import router as customer_channel_router
+from .customer_orders import router as customer_orders_router
 from .database import engine
 from .inventory import router as inventory_router
 from .logging_config import configure_logging, logger
@@ -128,4 +129,5 @@ app.include_router(orders_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(cart_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_router, prefix=settings.api_v1_prefix)
+app.include_router(customer_orders_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_channel_router, prefix=settings.api_v1_prefix)
