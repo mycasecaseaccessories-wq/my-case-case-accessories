@@ -13,6 +13,7 @@ class TelegramProduct:
     price: Decimal
     sku: str
     description: str | None = None
+    pre_order_eligible: bool = False
 
 
 class CommerceApiClient:
@@ -49,6 +50,7 @@ class CommerceApiClient:
             price=Decimal(str(payload["price"])),
             sku=str(payload["sku"]),
             description=payload.get("description"),
+            pre_order_eligible=bool(payload.get("pre_order_eligible", False)),
         )
 
     async def list_categories(self) -> list[dict[str, Any]]:
@@ -191,6 +193,20 @@ class CommerceApiClient:
             "GET", "/telegram/orders", headers=self._telegram_headers(telegram_user_id)
         )
         return list(response.json())
+
+    async def create_preorder(
+        self, telegram_user_id: int, product_id: UUID, quantity: int, key: str
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/telegram/pre-orders",
+            headers={
+                **self._telegram_headers(telegram_user_id),
+                "X-Preorder-Idempotency-Key": key,
+            },
+            json={"product_id": str(product_id), "quantity": quantity},
+        )
+        return response.json()
 
     async def get_customer_order(
         self, telegram_user_id: int, order_id: UUID

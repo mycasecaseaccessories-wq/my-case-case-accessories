@@ -10,6 +10,7 @@ type Product = {
   description?: string | null;
   price: string | number;
   sku: string;
+  pre_order_eligible?: boolean;
   category_id?: string | null;
 };
 type Category = { id: string; name: string };
@@ -34,6 +35,7 @@ export default function MiniAppPage() {
   const [orderMessage, setOrderMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cartError, setCartError] = useState("");
+  const [preorderMessage, setPreorderMessage] = useState("");
   const [sessionState, setSessionState] = useState<"checking" | "verified" | "unavailable" | "invalid">("checking");
   const [accountState, setAccountState] = useState<"unknown" | "linked" | "unlinked">("unknown");
   const [initData, setInitData] = useState("");
@@ -121,6 +123,26 @@ export default function MiniAppPage() {
   useEffect(() => {
     if (sessionState !== "verified") window.localStorage.setItem("my-case-mini-cart", JSON.stringify(cart));
   }, [cart, sessionState]);
+
+  async function createPreorder(product: Product, quantity: number) {
+    if (sessionState !== "verified" || accountState !== "linked") {
+      setPreorderMessage("Pre-order လုပ်ရန် verified Customer account link လိုအပ်ပါသည်။");
+      return;
+    }
+    setPreorderMessage("Pre-order တင်နေပါတယ်...");
+    try {
+      const response = await fetch(`${API}/telegram/pre-orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...telegramHeaders(), "X-Preorder-Idempotency-Key": `mini-preorder:${product.id}:${Date.now()}` },
+        body: JSON.stringify({ product_id: product.id, quantity }),
+      });
+      if (!response.ok) throw new Error("preorder");
+      const result = await response.json();
+      setPreorderMessage(`Pre-order အောင်မြင်ပါပြီ။ ${result.id} · ${result.status}`);
+    } catch {
+      setPreorderMessage("Pre-order မအောင်မြင်ပါ။ ထပ်ကြိုးစားပေးပါ။");
+    }
+  }
 
   async function loadOrders() {
     if (sessionState !== "verified") return;
@@ -468,10 +490,16 @@ export default function MiniAppPage() {
                 <button className="primary" onClick={() => add(product)}>
                   Add to cart
                 </button>
+                {product.pre_order_eligible && (
+                  <button className="secondary" onClick={() => void createPreorder(product, 1)}>
+                    Pre-order
+                  </button>
+                )}
               </article>
             ))}
           </section>
         )}
+        {preorderMessage && <p role="status">{preorderMessage}</p>}
         {selected && (
           <div className="cart-panel" role="dialog" aria-label="Product detail">
             <button className="secondary" onClick={() => setSelected(null)}>
@@ -491,6 +519,11 @@ export default function MiniAppPage() {
                 +
               </button>
             </div>
+            {selected.pre_order_eligible && (
+              <button className="secondary" onClick={() => void createPreorder(selected, selectedQuantity)}>
+                Pre-order {selectedQuantity}
+              </button>
+            )}
             <button
               className="primary"
               onClick={() => {

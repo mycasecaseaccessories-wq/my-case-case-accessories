@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from . import (
     cart_models,  # noqa: F401
     customer_models,  # noqa: F401
+    preorder_models,  # noqa: F401
     telegram_models,  # noqa: F401
 )
 from .auth import router as auth_router
@@ -29,6 +30,8 @@ from .database import engine
 from .inventory import router as inventory_router
 from .logging_config import configure_logging, logger
 from .orders import router as orders_router
+from .preorders import router as preorders_router
+from .preorders import telegram_router as telegram_preorders_router
 
 configure_logging()
 
@@ -131,3 +134,5 @@ app.include_router(cart_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_orders_router, prefix=settings.api_v1_prefix)
 app.include_router(customer_channel_router, prefix=settings.api_v1_prefix)
+app.include_router(preorders_router, prefix=settings.api_v1_prefix)
+app.include_router(telegram_preorders_router, prefix=settings.api_v1_prefix)

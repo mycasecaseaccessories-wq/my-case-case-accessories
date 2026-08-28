@@ -40,12 +40,14 @@ class ProductCreate(BaseModel):
     sku: str = Field(min_length=1, max_length=80)
     description: str | None = None
     price: Decimal = Field(ge=0, decimal_places=2, max_digits=12)
+    pre_order_eligible: bool = False
 
 
 class ProductRead(ProductCreate):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     is_active: bool
+    pre_order_eligible: bool
 
 
 class ProductUpdate(BaseModel):
@@ -56,6 +58,7 @@ class ProductUpdate(BaseModel):
     description: str | None = None
     price: Decimal | None = Field(default=None, ge=0, decimal_places=2, max_digits=12)
     is_active: bool | None = None
+    pre_order_eligible: bool | None = None
 
 
 @router.get("/categories", response_model=list[CategoryRead])
@@ -65,7 +68,9 @@ async def list_categories(session: AsyncSession = Depends(get_session)) -> list[
 
 
 @router.post("/categories", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
-async def create_category(payload: CategoryCreate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Category:
+async def create_category(
+    payload: CategoryCreate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))
+) -> Category:
     category = Category(**payload.model_dump())
     session.add(category)
     try:
@@ -78,7 +83,12 @@ async def create_category(payload: CategoryCreate, session: AsyncSession = Depen
 
 
 @router.patch("/categories/{category_id}", response_model=CategoryRead)
-async def update_category(category_id: UUID, payload: CategoryUpdate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Category:
+async def update_category(
+    category_id: UUID,
+    payload: CategoryUpdate,
+    session: AsyncSession = Depends(get_session),
+    _: object = Depends(require_roles("admin")),
+) -> Category:
     category = await session.get(Category, category_id)
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -114,7 +124,12 @@ async def get_product(product_id: UUID, session: AsyncSession = Depends(get_sess
 
 
 @router.patch("/products/{product_id}", response_model=ProductRead)
-async def update_product(product_id: UUID, payload: ProductUpdate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Product:
+async def update_product(
+    product_id: UUID,
+    payload: ProductUpdate,
+    session: AsyncSession = Depends(get_session),
+    _: object = Depends(require_roles("admin")),
+) -> Product:
     product = await session.get(Product, product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -133,7 +148,9 @@ async def update_product(product_id: UUID, payload: ProductUpdate, session: Asyn
 
 
 @router.post("/products", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
-async def create_product(payload: ProductCreate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))) -> Product:
+async def create_product(
+    payload: ProductCreate, session: AsyncSession = Depends(get_session), _: object = Depends(require_roles("admin"))
+) -> Product:
     if not await session.get(Category, payload.category_id):
         raise HTTPException(status_code=400, detail="Category not found")
     product = Product(**payload.model_dump())

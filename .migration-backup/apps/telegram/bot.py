@@ -59,6 +59,28 @@ class TelegramCommerceBot:
                     )
                     or "Category မရှိသေးပါ။"
                 )
+            if command in {"/preorder", "/pre-order"}:
+                parts = argument.split()
+                if len(parts) not in {1, 2}:
+                    return "Format: /preorder product_id [quantity]"
+                try:
+                    product_id = UUID(parts[0])
+                    quantity = int(parts[1]) if len(parts) == 2 else 1
+                except ValueError:
+                    return "Product ID နှင့် quantity ကို မှန်ကန်စွာ ထည့်ပေးပါ။"
+                product = await self.api.get_product(product_id)
+                if not product.pre_order_eligible:
+                    return "ဒီ product က pre-order မရပါ။"
+                create_preorder = getattr(self.api, "create_preorder", None)
+                if not callable(create_preorder):
+                    return "Pre-order service မရသေးပါ။"
+                preorder = await create_preorder(
+                    chat_id,
+                    product_id,
+                    quantity,
+                    f"telegram-preorder:{chat_id}:{product_id}:{quantity}",
+                )
+                return f"Pre-order တင်ပြီးပါပြီ။ Reference: {preorder['id']}\nStatus: {preorder['status']}"
             if command == "/products":
                 return format_product_menu(await self.api.list_products())
             if command == "/search":
@@ -162,7 +184,9 @@ class TelegramCommerceBot:
                             return "Telegram account ကို authenticated Customer account နဲ့ link ပြီးမှ checkout လုပ်နိုင်ပါမယ်။"
                         raise
                 else:
-                    customer = await self.api.find_or_create_customer(parts[0], parts[1])
+                    customer = await self.api.find_or_create_customer(
+                        parts[0], parts[1]
+                    )
                     customer_id = UUID(str(customer["id"]))
                     order = await self.api.create_order(
                         customer_id,
