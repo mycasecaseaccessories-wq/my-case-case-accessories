@@ -181,12 +181,9 @@ export default function MiniAppPage() {
     setCartError("");
     try {
       if (sessionState === "verified") {
-        const linkResponse = await fetch(`${API}/telegram/link`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...telegramHeaders() },
-          body: JSON.stringify({ full_name: name.trim(), phone: phone.trim() }),
-        });
-        if (!linkResponse.ok) throw new Error("link");
+        if (accountState !== "linked") {
+          throw new Error("identity-unlinked");
+        }
         for (const line of cart) {
           const itemResponse = await fetch(`${API}/telegram/cart/items`, {
             method: "POST",
@@ -231,9 +228,11 @@ export default function MiniAppPage() {
       const order = await response.json();
       setCart([]);
       setOrderMessage(`Order အောင်မြင်ပါပြီ။ ${order.id} · ${money(order.total)}`);
-    } catch {
+    } catch (error) {
       setOrderMessage(
-        "Order မအောင်မြင်ပါ။ Stock၊ Telegram link နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။",
+        error instanceof Error && error.message === "identity-unlinked"
+          ? "Telegram account ကို verified Customer account နဲ့ link ပြီးမှ checkout လုပ်နိုင်ပါမယ်။"
+          : "Order မအောင်မြင်ပါ။ Stock၊ Telegram link နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။",
       );
     } finally {
       setSubmitting(false);

@@ -149,15 +149,20 @@ class TelegramCommerceBot:
                 checkout = getattr(self.api, "checkout_cart", None)
                 if not cart and not (callable(link) and callable(checkout)):
                     return "Cart လွတ်နေပါတယ်။"
-                customer = await self.api.find_or_create_customer(parts[0], parts[1])
                 if callable(link) and callable(checkout):
-                    await link(chat_id, parts[0], parts[1])
-                    for line in cart.values():
-                        await self.api.set_cart_item(
-                            chat_id, line.product_id, line.quantity
-                        )  # type: ignore[attr-defined]
-                    order = await checkout(chat_id, f"telegram:{chat_id}:{uuid4()}")
+                    try:
+                        await link(chat_id, parts[0], parts[1])
+                        for line in cart.values():
+                            await self.api.set_cart_item(
+                                chat_id, line.product_id, line.quantity
+                            )  # type: ignore[attr-defined]
+                        order = await checkout(chat_id, f"telegram:{chat_id}:{uuid4()}")
+                    except httpx.HTTPStatusError as exc:
+                        if exc.response.status_code == 409:
+                            return "Telegram account ကို authenticated Customer account နဲ့ link ပြီးမှ checkout လုပ်နိုင်ပါမယ်။"
+                        raise
                 else:
+                    customer = await self.api.find_or_create_customer(parts[0], parts[1])
                     customer_id = UUID(str(customer["id"]))
                     order = await self.api.create_order(
                         customer_id,

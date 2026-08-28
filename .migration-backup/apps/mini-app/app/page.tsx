@@ -35,6 +35,7 @@ export default function MiniAppPage() {
   const [submitting, setSubmitting] = useState(false);
   const [cartError, setCartError] = useState("");
   const [sessionState, setSessionState] = useState<"checking" | "verified" | "unavailable" | "invalid">("checking");
+  const [accountState, setAccountState] = useState<"unknown" | "linked" | "unlinked">("unknown");
   const [initData, setInitData] = useState("");
   const [orders, setOrders] = useState<
     Array<{ id: string; status: string; total: string | number; created_at?: string }>
@@ -70,6 +71,15 @@ export default function MiniAppPage() {
         .then(async (response) => {
           setSessionState(response.ok ? "verified" : "invalid");
           if (response.ok) {
+            const accountResponse = await fetch(`${API}/auth/telegram/me`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ init_data: webApp.initData || "" }),
+            });
+            if (accountResponse.ok) {
+              const account = await accountResponse.json();
+              setAccountState(account.linked ? "linked" : "unlinked");
+            }
             const cartResponse = await fetch(`${API}/telegram/cart`, {
               headers: { "X-Telegram-Init-Data": webApp.initData || "" },
             });
@@ -171,12 +181,9 @@ export default function MiniAppPage() {
     setCartError("");
     try {
       if (sessionState === "verified") {
-        const linkResponse = await fetch(`${API}/telegram/link`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...telegramHeaders() },
-          body: JSON.stringify({ full_name: name.trim(), phone: phone.trim() }),
-        });
-        if (!linkResponse.ok) throw new Error("link");
+        if (accountState !== "linked") {
+          throw new Error("identity-unlinked");
+        }
         for (const line of cart) {
           const itemResponse = await fetch(`${API}/telegram/cart/items`, {
             method: "POST",
@@ -221,9 +228,11 @@ export default function MiniAppPage() {
       const order = await response.json();
       setCart([]);
       setOrderMessage(`Order အောင်မြင်ပါပြီ။ ${order.id} · ${money(order.total)}`);
-    } catch {
+    } catch (error) {
       setOrderMessage(
-        "Order မအောင်မြင်ပါ။ Stock၊ Telegram link နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။",
+        error instanceof Error && error.message === "identity-unlinked"
+          ? "Telegram account ကို verified Customer account နဲ့ link ပြီးမှ checkout လုပ်နိုင်ပါမယ်။"
+          : "Order မအောင်မြင်ပါ။ Stock၊ Telegram link နှင့် customer အချက်အလက်ကို ပြန်စစ်ပြီး ထပ်ကြိုးစားပါ။",
       );
     } finally {
       setSubmitting(false);
@@ -287,6 +296,11 @@ export default function MiniAppPage() {
         {sessionState === "invalid" && (
           <p className="notice" role="alert">
             Telegram session ကို အတည်ပြုမရသေးပါ။ Customer account/order history များကို မပြသပါ။
+          </p>
+        )}
+        {sessionState === "verified" && accountState === "unlinked" && (
+          <p className="notice" role="status">
+            Telegram account ကို canonical Customer နဲ့ မချိတ်ရသေးပါ။ Account linking ပြီးမှ customer-owned features အသုံးပြုနိုင်ပါမယ်။
           </p>
         )}
         {ordersOpen && (
